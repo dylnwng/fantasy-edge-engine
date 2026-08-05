@@ -19,6 +19,7 @@ from edge_engine.model.scoring import compute_points_for_seasons
 from edge_engine.model.train import MODEL_PATH
 from edge_engine.paths import PLAYER_WEEK_PATH
 from edge_engine.roster.interface import get_default_source
+from edge_engine.roster.roster_status import get_flagged_roster_statuses, roster_status_note
 
 
 def load_model() -> xgb.XGBRegressor:
@@ -74,7 +75,15 @@ def score_as_of_week(season: int, target_week: int, config: ModelConfig | None =
         # week <= trailing_window+1 this season) -- return the same shape
         # any caller expects, not a crash several pandas frames deep from
         # feeding model.predict() a 0-row input.
-        empty_cols = [*latest.columns, "predicted_score", "baseline_score", "flagged", "has_injury_context", "injury_explanation"]
+        empty_cols = [
+            *latest.columns,
+            "predicted_score",
+            "baseline_score",
+            "flagged",
+            "has_injury_context",
+            "injury_explanation",
+            "roster_status_note",
+        ]
         return pd.DataFrame(columns=empty_cols)
 
     latest["predicted_score"] = model.predict(latest[feat_cols])
@@ -101,6 +110,13 @@ def score_as_of_week(season: int, target_week: int, config: ModelConfig | None =
     ]
     latest["has_injury_context"] = [c.has_injury_context for c in contexts]
     latest["injury_explanation"] = [c.explanation for c in contexts]
+
+    # Non-injury official roster status (suspended/PUP/exempt/reserve) --
+    # a separate, structured-data source from the injury report above
+    # (see roster_status.py's docstring); surfaced the same way, never
+    # baked into predicted_score itself.
+    roster_statuses = get_flagged_roster_statuses()
+    latest["roster_status_note"] = [roster_status_note(row.player_id, roster_statuses) for row in latest.itertuples()]
 
     return latest.sort_values("predicted_score", ascending=False).reset_index(drop=True)
 

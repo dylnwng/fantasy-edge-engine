@@ -21,7 +21,7 @@ Tier order (first match wins):
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable
 
 import pandas as pd
@@ -32,6 +32,7 @@ from edge_engine.model.scoring import compute_points_for_seasons
 from edge_engine.model.variance import compute_trailing_points_std
 from edge_engine.roster.interface import get_default_source
 from edge_engine.roster.matchup import MatchupPlayer
+from edge_engine.roster.roster_status import get_flagged_roster_statuses, roster_status_note
 from edge_engine.simulation.config import SimulationConfig, load_simulation_config
 
 # No real usage history exists for these positions at all (K=7 rows,
@@ -86,22 +87,41 @@ def _scored_lookup(
     return scored_by_player_id, position_avg_std
 
 
+def _with_roster_status_note(projection: PlayerProjection, roster_statuses: dict[str, tuple[str, str]]) -> PlayerProjection:
+    """Appends a non-injury official roster status flag (suspended/PUP/
+    exempt/reserve -- see roster_status.py) to whatever note this
+    projection's tier already carries, if any. Applied regardless of
+    tier: a suspension is worth surfacing even for a "model" projection
+    that would otherwise carry an empty note, and never changes
+    mean/std -- flagged, not baked into the score, same as injury
+    context elsewhere in this project."""
+    flag = roster_status_note(projection.player_id, roster_statuses)
+    if flag is None:
+        return projection
+    note = f"{projection.note} -- {flag}" if projection.note else flag
+    return replace(projection, note=note)
+
+
 def resolve_projection(
     matchup_player: MatchupPlayer,
     scored_by_player_id: dict[str, tuple[float, float | None]],
     position_avg_std: dict[str, float],
     sim_config: SimulationConfig,
+    roster_statuses: dict[str, tuple[str, str]] | None = None,
 ) -> PlayerProjection:
     p = matchup_player.player
+    roster_statuses = roster_statuses or {}
 
     if matchup_player.on_bye:
-        return PlayerProjection(p.player_id, p.name, p.position, p.team, 0.0, 0.0, "bye", "on bye this week")
+        projection = PlayerProjection(p.player_id, p.name, p.position, p.team, 0.0, 0.0, "bye", "on bye this week")
+        return _with_roster_status_note(projection, roster_statuses)
 
     if matchup_player.game_final:
-        return PlayerProjection(
+        projection = PlayerProjection(
             p.player_id, p.name, p.position, p.team, matchup_player.actual_points, 0.0, "final",
             "game already final this week -- using actual points, not a projection",
         )
+        return _with_roster_status_note(projection, roster_statuses)
 
     entry = scored_by_player_id.get(p.player_id) if p.player_id else None
 
@@ -119,20 +139,23 @@ def resolve_projection(
                 else "fewer than 2 games played this season -- falling back to ESPN's own "
                      "projection with a position-average std"
             )
-        return PlayerProjection(
+        projection = PlayerProjection(
             p.player_id, p.name, p.position, p.team, matchup_player.espn_projected_points, std,
             "espn_projection_only", note,
         )
+        return _with_roster_status_note(projection, roster_statuses)
 
     predicted_score, trailing_std = entry
     if trailing_std is None:
         std = position_avg_std.get(p.position, sim_config.untracked_position_std)
-        return PlayerProjection(
+        projection = PlayerProjection(
             p.player_id, p.name, p.position, p.team, predicted_score, std, "model_position_std_fallback",
             f"fewer than {sim_config.min_games_for_variance} trailing games -- using position-average "
             "std instead of this player's own",
         )
-    return PlayerProjection(p.player_id, p.name, p.position, p.team, predicted_score, trailing_std, "model", "")
+        return _with_roster_status_note(projection, roster_statuses)
+    projection = PlayerProjection(p.player_id, p.name, p.position, p.team, predicted_score, trailing_std, "model", "")
+    return _with_roster_status_note(projection, roster_statuses)
 
 
 def build_projections(
@@ -151,7 +174,11 @@ def build_projections(
     file" -- required for the --week flag to mean what it says."""
     sim_config = sim_config or load_simulation_config()
     scored_by_player_id, position_avg_std = _scored_lookup(season, week, sim_config)
-    return [resolve_projection(mp, scored_by_player_id, position_avg_std, sim_config) for mp in matchup_players]
+    roster_statuses = get_flagged_roster_statuses()
+    return [
+        resolve_projection(mp, scored_by_player_id, position_avg_std, sim_config, roster_statuses)
+        for mp in matchup_players
+    ]
 
 
 def make_projection_fn(
@@ -164,4 +191,5 @@ def make_projection_fn(
     re-running those lookups each time."""
     sim_config = sim_config or load_simulation_config()
     scored_by_player_id, position_avg_std = _scored_lookup(season, week, sim_config)
-    return lambda mp: resolve_projection(mp, scored_by_player_id, position_avg_std, sim_config)
+    roster_statuses = get_flagged_roster_statuses()
+    return lambda mp: resolve_projection(mp, scored_by_player_id, position_avg_std, sim_config, roster_statuses)

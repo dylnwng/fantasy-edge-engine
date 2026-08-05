@@ -54,7 +54,13 @@ def confidence_tier(predicted_score: float, baseline_score: float, flag_margin: 
 def _explanation_for(player_week: pd.DataFrame, row: pd.Series, window: int) -> str:
     trend = usage_trend_explanation(player_week, row.player_id, int(row.season), int(row.week), window)
     if row.has_injury_context:
-        return f"{trend}. {row.injury_explanation}"
+        trend = f"{trend}. {row.injury_explanation}"
+    # roster_status_note is None for the common case, but pandas coerces
+    # a mostly-None object column to NaN on assignment (see predict.py) --
+    # NaN is truthy in Python, so a plain `if row.roster_status_note`
+    # check would append the literal string "nan" to every explanation.
+    if pd.notna(row.roster_status_note):
+        trend = f"{trend}. {row.roster_status_note}"
     return trend
 
 
