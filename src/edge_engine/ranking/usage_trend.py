@@ -1,9 +1,13 @@
 """Turns a player's trailing-window usage rows into the "which specific
-metric moved" explanation requirement 4 needs (e.g. "snap share 38% -> 64%
-over 2 wks"), instead of a black-box score.
+metric moved" story requirement 4 needs (e.g. "snap share 38% -> 64%
+over 2 wks"), instead of a black-box score. get_usage_trend() exposes the
+raw series (for a sparkline or other visualization); usage_trend_explanation()
+formats the same selection into the sentence.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass, field
 
 import pandas as pd
 
@@ -19,7 +23,18 @@ _TRACKED_METRICS = [
 _PERCENT_MOVE_FLOOR = 0.05  # 5 points -- below this a % metric isn't "the story"
 
 
-def usage_trend_explanation(player_week: pd.DataFrame, player_id: str, season: int, week: int, window: int) -> str:
+@dataclass(frozen=True)
+class UsageTrend:
+    insufficient_history: bool
+    moved_meaningfully: bool
+    label: str | None
+    values: list[float] = field(default_factory=list)
+    weeks: list[int] = field(default_factory=list)
+    is_percentage: bool = False
+    n_weeks_span: int = 0
+
+
+def get_usage_trend(player_week: pd.DataFrame, player_id: str, season: int, week: int, window: int) -> UsageTrend:
     rows = player_week[
         (player_week["season"] == season)
         & (player_week["player_id"] == player_id)
@@ -28,30 +43,52 @@ def usage_trend_explanation(player_week: pd.DataFrame, player_id: str, season: i
     ].sort_values("week")
 
     if len(rows) < 2:
-        return "Limited usage history this season — not enough games yet to show a trend."
+        return UsageTrend(insufficient_history=True, moved_meaningfully=False, label=None)
 
-    first, last = rows.iloc[0], rows.iloc[-1]
-    n_weeks = int(last["week"] - first["week"])
+    n_weeks = int(rows["week"].iloc[-1] - rows["week"].iloc[0])
+    weeks = rows["week"].tolist()
 
     percent_moves = []
     other_moves = []
     for col, label, is_pct in _TRACKED_METRICS:
-        f, l = first.get(col), last.get(col)
-        if pd.isna(f) or pd.isna(l):
+        series = rows[col]
+        if series.isna().any():
             continue
-        delta = l - f
-        (percent_moves if is_pct else other_moves).append((abs(delta), label, f, l, delta, is_pct))
+        delta = series.iloc[-1] - series.iloc[0]
+        entry = (abs(delta), label, series.tolist(), is_pct)
+        (percent_moves if is_pct else other_moves).append(entry)
 
     percent_moves.sort(key=lambda m: -m[0])
     if percent_moves and percent_moves[0][0] >= _PERCENT_MOVE_FLOOR:
-        _, label, f, l, delta, _ = percent_moves[0]
-        direction = "up" if delta > 0 else "down"
-        return f"{label} {f:.0%} → {l:.0%} over {n_weeks} wk{'s' if n_weeks != 1 else ''} ({direction})"
+        _, label, values, is_pct = percent_moves[0]
+        return UsageTrend(False, True, label, values, weeks, is_pct, n_weeks)
 
     other_moves.sort(key=lambda m: -m[0])
     if other_moves and other_moves[0][0] >= 1:
-        _, label, f, l, delta, _ = other_moves[0]
-        direction = "up" if delta > 0 else "down"
-        return f"{label} {f:.0f} → {l:.0f} over {n_weeks} wk{'s' if n_weeks != 1 else ''} ({direction})"
+        _, label, values, is_pct = other_moves[0]
+        return UsageTrend(False, True, label, values, weeks, is_pct, n_weeks)
 
-    return f"Usage steady over the last {n_weeks} wk{'s' if n_weeks != 1 else ''} — no single metric moved meaningfully."
+    # Nothing moved meaningfully -- still surface the closest-to-moving
+    # series (for a flat sparkline) rather than nothing at all.
+    fallback = percent_moves[0] if percent_moves else (other_moves[0] if other_moves else None)
+    if fallback:
+        _, label, values, is_pct = fallback
+        return UsageTrend(False, False, label, values, weeks, is_pct, n_weeks)
+    return UsageTrend(False, False, None, [], weeks, False, n_weeks)
+
+
+def usage_trend_explanation(player_week: pd.DataFrame, player_id: str, season: int, week: int, window: int) -> str:
+    trend = get_usage_trend(player_week, player_id, season, week, window)
+
+    if trend.insufficient_history:
+        return "Limited usage history this season — not enough games yet to show a trend."
+
+    plural = "s" if trend.n_weeks_span != 1 else ""
+    if not trend.moved_meaningfully or trend.label is None:
+        return f"Usage steady over the last {trend.n_weeks_span} wk{plural} — no single metric moved meaningfully."
+
+    f, l = trend.values[0], trend.values[-1]
+    direction = "up" if l > f else "down"
+    if trend.is_percentage:
+        return f"{trend.label} {f:.0%} → {l:.0%} over {trend.n_weeks_span} wk{plural} ({direction})"
+    return f"{trend.label} {f:.0f} → {l:.0f} over {trend.n_weeks_span} wk{plural} ({direction})"

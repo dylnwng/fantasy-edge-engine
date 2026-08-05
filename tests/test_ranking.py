@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 
 from edge_engine.ranking.output import confidence_tier
-from edge_engine.ranking.usage_trend import usage_trend_explanation
+from edge_engine.ranking.usage_trend import get_usage_trend, usage_trend_explanation
 
 
 @pytest.mark.parametrize(
@@ -77,3 +77,29 @@ def test_usage_trend_steady_case_is_still_non_empty():
 
     assert explanation
     assert "steady" in explanation
+
+
+def test_get_usage_trend_exposes_raw_series_for_visualization():
+    player_week = pd.DataFrame(
+        [
+            _pw_row(1, 0.30, 0.10, 1),
+            _pw_row(2, 0.65, 0.12, 1),
+        ]
+    )
+    trend = get_usage_trend(player_week, "P1", 2023, 2, window=2)
+
+    assert trend.insufficient_history is False
+    assert trend.moved_meaningfully is True
+    assert trend.label == "snap share"
+    assert trend.values == [0.30, 0.65]
+    assert trend.weeks == [1, 2]
+    assert trend.is_percentage is True
+    assert trend.n_weeks_span == 1
+
+
+def test_get_usage_trend_insufficient_history_has_no_series():
+    player_week = pd.DataFrame([_pw_row(1, 0.40, 0.10, 0)])
+    trend = get_usage_trend(player_week, "P1", 2023, 1, window=2)
+
+    assert trend.insufficient_history is True
+    assert trend.values == []

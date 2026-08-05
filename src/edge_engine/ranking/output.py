@@ -32,6 +32,8 @@ class RankedFreeAgent:
     name: str
     position: str
     team: str
+    season: int
+    week: int  # the exact scored week the score/explanation are computed from
     predicted_score: float
     baseline_score: float
     confidence_tier: ConfidenceTier
@@ -81,6 +83,8 @@ def build_free_agent_rankings(config: ModelConfig | None = None) -> tuple[list[R
                 name=player.name,
                 position=row.position,
                 team=row.team,
+                season=int(row.season),
+                week=int(row.week),
                 predicted_score=float(row.predicted_score),
                 baseline_score=float(row.baseline_score),
                 confidence_tier=confidence_tier(row.predicted_score, row.baseline_score, config.flag_margin),

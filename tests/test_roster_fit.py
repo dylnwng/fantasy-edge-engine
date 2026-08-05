@@ -24,6 +24,8 @@ def _candidate(player_id, name, position, team, predicted_score) -> RankedFreeAg
         name=name,
         position=position,
         team=team,
+        season=2023,
+        week=5,
         predicted_score=predicted_score,
         baseline_score=predicted_score - 5,  # arbitrary, not under test here
         confidence_tier="Medium",
