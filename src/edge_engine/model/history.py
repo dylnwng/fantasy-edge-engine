@@ -28,7 +28,8 @@ import xgboost as xgb
 
 from edge_engine.model.config import ModelConfig, load_model_config
 from edge_engine.model.features import build_features, feature_columns
-from edge_engine.model.train import MODEL_PATH, _compute_points_for_seasons, _ensure_seasons_ingested
+from edge_engine.model.scoring import compute_points_for_seasons
+from edge_engine.model.train import MODEL_PATH, _ensure_seasons_ingested
 from edge_engine.roster.interface import get_default_source
 
 FOLLOWING_WINDOW = 3
@@ -72,7 +73,7 @@ def track_flagged_players(seasons: list[int], config: ModelConfig | None = None)
     player_week = player_week[player_week["season"].isin(seasons)]
 
     league_config = get_default_source().get_league_config()
-    points_table = _compute_points_for_seasons(seasons, league_config.scoring)
+    points_table = compute_points_for_seasons(seasons, league_config.scoring)
     merged = player_week.merge(points_table, on=["season", "week", "player_id"], how="inner")
 
     features = build_features(merged, merged["points"], window=config.trailing_window)

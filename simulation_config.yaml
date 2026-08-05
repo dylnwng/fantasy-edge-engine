@@ -1,0 +1,30 @@
+# Monte Carlo matchup simulator + FLEX optimizer configuration. Not
+# hardcoded in code so it can be re-tuned without touching the
+# simulation modules.
+
+# Number of Monte Carlo draws per lineup. 10,000 gives a win-probability
+# standard error of ~0.5 percentage points, precise enough for a fantasy
+# decision, and runs in well under a second (fully vectorized numpy).
+n_sims: 10000
+
+# Trailing window (in games played) for the empirical points-std
+# calculation. Deliberately longer than the opportunity model's own
+# 2-game trend window -- a 2-point std is nearly meaningless, dominated
+# by noise rather than reflecting a real spread.
+variance_window: 6
+
+# Below this many trailing games, a std estimate is treated as
+# unreliable (NaN) rather than reported.
+min_games_for_variance: 3
+
+# Minimum simulated win-probability improvement before recommending a
+# FLEX swap -- filters out "swaps" that are just Monte Carlo sampling
+# noise, mirroring model_config.yaml's flag_margin philosophy.
+win_prob_improvement_threshold: 0.01
+
+# Fallback standard deviation for positions with real but sparse usage
+# history (falls into the espn_projection_only tier). K/D-ST are
+# excluded from this -- they get a hardcoded std of 0.0 in
+# projections.py, since nflverse's usage data has essentially zero
+# history for those positions to even approximate a fallback from.
+untracked_position_std: 5.0

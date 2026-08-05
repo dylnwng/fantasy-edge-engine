@@ -18,10 +18,9 @@ import pandas as pd
 import xgboost as xgb
 
 from edge_engine.ingestion.pipeline import ingest_seasons
-from edge_engine.ingestion.raw import fetch_weekly_data
 from edge_engine.model.config import ModelConfig, load_model_config
 from edge_engine.model.features import build_features, feature_columns
-from edge_engine.model.scoring import compute_fantasy_points
+from edge_engine.model.scoring import compute_points_for_seasons
 from edge_engine.paths import PLAYER_WEEK_PATH, ROOT_DIR
 from edge_engine.roster.interface import get_default_source
 
@@ -57,27 +56,13 @@ def _ensure_seasons_ingested(seasons: list[int]) -> pd.DataFrame:
     return player_week
 
 
-def _compute_points_for_seasons(seasons: list[int], scoring) -> pd.DataFrame:
-    """Fantasy points under the league's actual scoring settings, computed
-    from nflverse's raw weekly_data (which has the raw stat columns
-    compute_fantasy_points needs) — not from the usage table, which
-    intentionally doesn't carry them."""
-    frames = []
-    for season in seasons:
-        weekly = fetch_weekly_data(season)
-        weekly = weekly[weekly["season_type"] == "REG"].copy()
-        weekly["points"] = compute_fantasy_points(weekly, scoring).to_numpy()
-        frames.append(weekly[["season", "week", "player_id", "points"]])
-    return pd.concat(frames, ignore_index=True)
-
-
 def build_training_table(config: ModelConfig) -> pd.DataFrame:
     all_seasons = sorted(set(config.train_seasons) | {config.validation_season})
     player_week = _ensure_seasons_ingested(all_seasons)
     player_week = player_week[player_week["season"].isin(all_seasons)]
 
     league_config = get_default_source().get_league_config()
-    points_table = _compute_points_for_seasons(all_seasons, league_config.scoring)
+    points_table = compute_points_for_seasons(all_seasons, league_config.scoring)
 
     merged = player_week.merge(points_table, on=["season", "week", "player_id"], how="inner")
     return build_features(merged, merged["points"], window=config.trailing_window)

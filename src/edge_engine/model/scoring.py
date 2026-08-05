@@ -23,6 +23,7 @@ import warnings
 
 import pandas as pd
 
+from edge_engine.ingestion.raw import fetch_weekly_data
 from edge_engine.roster.models import ScoringSettings
 
 # bonus config key -> raw weekly_data column(s) to sum, and the sign
@@ -71,3 +72,17 @@ def compute_fantasy_points(weekly: pd.DataFrame, scoring: ScoringSettings) -> pd
         )
 
     return points
+
+
+def compute_points_for_seasons(seasons: list[int], scoring: ScoringSettings) -> pd.DataFrame:
+    """Fantasy points under the league's actual scoring settings, computed
+    from nflverse's raw weekly_data (which has the raw stat columns
+    compute_fantasy_points needs) — not from the usage table, which
+    intentionally doesn't carry them. Returns (season, week, player_id, points)."""
+    frames = []
+    for season in seasons:
+        weekly = fetch_weekly_data(season)
+        weekly = weekly[weekly["season_type"] == "REG"].copy()
+        weekly["points"] = compute_fantasy_points(weekly, scoring).to_numpy()
+        frames.append(weekly[["season", "week", "player_id", "points"]])
+    return pd.concat(frames, ignore_index=True)

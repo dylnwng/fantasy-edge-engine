@@ -15,7 +15,8 @@ import xgboost as xgb
 from edge_engine.model.config import ModelConfig, load_model_config
 from edge_engine.model.features import build_features, feature_columns
 from edge_engine.model.injury_context import get_injury_context, load_injury_reports
-from edge_engine.model.train import MODEL_PATH, _compute_points_for_seasons
+from edge_engine.model.scoring import compute_points_for_seasons
+from edge_engine.model.train import MODEL_PATH
 from edge_engine.paths import PLAYER_WEEK_PATH
 from edge_engine.roster.interface import get_default_source
 
@@ -42,7 +43,7 @@ def score_latest_week(config: ModelConfig | None = None) -> pd.DataFrame:
     player_week = player_week[player_week["season"] == latest_season]
 
     league_config = get_default_source().get_league_config()
-    points_table = _compute_points_for_seasons([latest_season], league_config.scoring)
+    points_table = compute_points_for_seasons([latest_season], league_config.scoring)
     merged = player_week.merge(points_table, on=["season", "week", "player_id"], how="inner")
 
     features = build_features(merged, merged["points"], window=config.trailing_window)

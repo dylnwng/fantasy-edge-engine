@@ -25,6 +25,7 @@ class Player:
     bye_week: int | None = None
     match_status: MatchStatus = "unmatched"
     match_note: str = ""
+    slot_position: str | None = None  # this-week starter/bench slot ("RB","FLEX","BE","IR"...); only ESPN populates it
 
 
 @dataclass(frozen=True)
