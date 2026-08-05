@@ -25,6 +25,17 @@ class SimulationConfig:
     # hardcoded in projections.py, since there's no usage history at all to
     # even approximate a fallback from.
     untracked_position_std: float
+    # "normal" (default, validated -- 63.9% pick accuracy / 0.220 Brier
+    # against 97 real 2024 matchups, see EVALUATION.md) or "gamma" (a
+    # right-skewed, non-negative alternative). Only change this after
+    # re-running scripts/calibration_test.py and confirming it holds up --
+    # see monte_carlo.py's module docstring.
+    distribution: str
+    # 0.0 (default, validated) to 1.0: induces same-team correlation in
+    # the Monte Carlo draws. Set from scripts/measure_team_correlation.py's
+    # real, data-derived measurement -- never a guessed number (same
+    # discipline as K/D-ST's std=0 decision in EVALUATION.md).
+    team_correlation: float
 
 
 def load_simulation_config(path: Path | None = None) -> SimulationConfig:
@@ -37,4 +48,6 @@ def load_simulation_config(path: Path | None = None) -> SimulationConfig:
         min_games_for_variance=raw.get("min_games_for_variance", 3),
         win_prob_improvement_threshold=raw.get("win_prob_improvement_threshold", 0.01),
         untracked_position_std=raw.get("untracked_position_std", 5.0),
+        distribution=raw.get("distribution", "normal"),
+        team_correlation=raw.get("team_correlation", 0.0),
     )

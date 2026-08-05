@@ -75,7 +75,10 @@ def main() -> None:
             home_proj = [project_fn(mp) for mp in home_stripped]
             away_proj = [project_fn(mp) for mp in away_stripped]
 
-            result = simulate_matchup(home_proj, away_proj, n_sims=sim_config.n_sims)
+            result = simulate_matchup(
+                home_proj, away_proj, n_sims=sim_config.n_sims,
+                distribution=sim_config.distribution, team_correlation=sim_config.team_correlation,
+            )
 
             records.append({
                 "week": week,

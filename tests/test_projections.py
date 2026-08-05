@@ -6,6 +6,7 @@ from edge_engine.simulation.projections import resolve_projection
 CONFIG = SimulationConfig(
     n_sims=1000, variance_window=6, min_games_for_variance=3,
     win_prob_improvement_threshold=0.01, untracked_position_std=5.0,
+    distribution="normal", team_correlation=0.0,
 )
 
 

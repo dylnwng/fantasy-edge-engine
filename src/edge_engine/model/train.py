@@ -56,7 +56,13 @@ def _ensure_seasons_ingested(seasons: list[int]) -> pd.DataFrame:
     return player_week
 
 
-def build_training_table(config: ModelConfig) -> pd.DataFrame:
+def build_training_table_with_merged(config: ModelConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Same as build_training_table(), but also returns the intermediate
+    merged frame (player_week + points, before build_features() drops
+    `opponent`/other non-feature columns) -- needed by the opponent_defense
+    (DvP) experiment, which requires `opponent` to resolve each player's
+    upcoming defense. A pure additive refactor: build_training_table()
+    below is unchanged in behavior, just delegates here."""
     all_seasons = sorted(set(config.train_seasons) | {config.validation_season})
     player_week = _ensure_seasons_ingested(all_seasons)
     player_week = player_week[player_week["season"].isin(all_seasons)]
@@ -65,7 +71,12 @@ def build_training_table(config: ModelConfig) -> pd.DataFrame:
     points_table = compute_points_for_seasons(all_seasons, league_config.scoring)
 
     merged = player_week.merge(points_table, on=["season", "week", "player_id"], how="inner")
-    return build_features(merged, merged["points"], window=config.trailing_window)
+    features = build_features(merged, merged["points"], window=config.trailing_window)
+    return features, merged
+
+
+def build_training_table(config: ModelConfig) -> pd.DataFrame:
+    return build_training_table_with_merged(config)[0]
 
 
 def train_and_evaluate(config: ModelConfig | None = None) -> dict:

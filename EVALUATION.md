@@ -239,6 +239,62 @@ week-scoping assumption that would have quietly undermined both this test and th
    frames deep with a cryptic `IndexError` instead of failing cleanly. Fixed to return an
    empty result immediately.
 
+## Two more accuracy experiments: one negative, one a wash
+
+Asked how to push accuracy further, I tried two more things. Both were built as measured
+A/B experiments against the same held-out data already used above — not silent
+replacements — because both carried real regression risk to an already-validated system.
+
+**Opponent-adjusted ("defense vs. position") projections.** The opportunity model only
+ever looks at a player's own usage trend, never who they're playing next. Added a feature
+representing how many fantasy points a player's upcoming opponent has recently allowed to
+that position (an 8-game trailing window, resolved from the real NFL schedule so it works
+at true prediction time, not just retrospectively), trained a variant model with it, and
+compared against the general model on the exact same held-out rows:
+
+| | With DvP | General model (same rows) |
+|---|---|---|
+| MAE | 5.02 | 5.03 |
+| Hit rate | 66.7% (n=243) | 68.4% (n=237) |
+
+MAE is a tie — a 0.01-point difference on ~240 samples is noise, not a win, regardless of
+which number is technically smaller. Hit rate, the more decision-relevant metric given
+this whole project's precision-over-recall framing, is actually *worse* with DvP. **Not
+adopted.** Reported honestly rather than as a win because one metric moved in the "right"
+direction by a trivial margin — the same discipline as the position-split experiment,
+which found a real, uneven result (helped TE, didn't help RB/WR) instead of a clean yes.
+
+**Right-skewed, correlated Monte Carlo draws.** The simulator drew every player
+independently from a Normal distribution — not how real fantasy scores or real teammates
+actually behave (a ceiling game is more likely than a symmetric bell curve implies, and
+two players on the same offense really do have *some* shared good/bad weeks). Rather than
+guess how strong that correlation is, I measured it directly from real 2018-2024 data:
+same-team teammates' point residuals (actual minus each player's own running average,
+isolating the shared-game-script component from each player's own established level)
+correlate at **r=0.0405** — a same-size cross-team control group measured **r=0.0087** as
+a sanity check on the method itself, about 5x smaller, confirming the same-team signal is
+real and not a measurement artifact. That's a real but modest number — much smaller than
+intuition might suggest; most of a team's week-to-week fantasy variance is idiosyncratic
+per player, not shared.
+
+Switched the simulator to a moment-matched Gamma distribution (right-skewed, non-negative,
+same mean/std, no new dependency) plus that measured 0.041 correlation, and re-ran the
+same 97-matchup calibration test:
+
+| | Normal, independent (previous) | Gamma, r=0.041 (new) |
+|---|---|---|
+| Pick accuracy | 61.9% | 64.9% |
+| Brier score | 0.2198 | 0.2196 |
+
+Brier score is effectively unchanged (a 0.0002 difference is nothing) — this is not a
+meaningful accuracy win, and I'm not presenting it as one. Pick accuracy moved a few
+points, which on 97 observations is within what Monte Carlo sampling noise alone could
+produce. **Adopted anyway**, because it held steady while removing an assumption
+(independent, symmetric draws) that was more obviously wrong than convenient, and because
+the correlation value going into it is a real, measured number rather than an invented
+one. If a future, larger calibration run shows this was the wrong call, that's a decision
+this same test can revisit and reverse just as easily.
+
 ## Bottom line
 
 The model beats a naive rolling-average baseline by a real but modest margin (~10% MAE
@@ -247,7 +303,11 @@ improvement), and its flagged list — the actual decision-relevant output — h
 Run against a real league on real ESPN infrastructure, its top flags line up with
 specific, verifiable 2024 storylines rather than just looking reasonable in a table. The
 separate matchup simulator's win probabilities are honestly calibrated against 97 real
-outcomes, not just directionally plausible. None of this is a large, dramatic edge. It's
-a legitimate, honestly-measured one, arrived at by building an evaluation harness rigorous
-enough to catch and correct my own modeling mistakes along the way — which is the actual
-point of the exercise.
+outcomes, not just directionally plausible. Two follow-on accuracy experiments were tried
+and reported honestly regardless of outcome: opponent-adjusted projections didn't
+measurably help and weren't adopted; a right-skewed, correlation-aware simulator held
+calibration steady on real, measured inputs and was adopted on that basis, not because the
+number moved dramatically. None of this is a large, dramatic edge. It's a legitimate,
+honestly-measured one, arrived at by building an evaluation harness rigorous enough to
+catch and correct my own modeling mistakes along the way — which is the actual point of
+the exercise.

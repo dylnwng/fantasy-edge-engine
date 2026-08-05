@@ -18,7 +18,7 @@ import numpy as np
 from edge_engine.ranking.roster_fit import FLEX_ELIGIBLE_POSITIONS
 from edge_engine.roster.matchup import MatchupPlayer
 from edge_engine.roster.models import Player
-from edge_engine.simulation.monte_carlo import simulate_side
+from edge_engine.simulation.monte_carlo import Distribution, simulate_side
 from edge_engine.simulation.projections import PlayerProjection
 
 _NON_STARTER_SLOTS = ("FLEX", "BE", "IR")
@@ -64,6 +64,8 @@ def find_best_flex_lineup(
     n_sims: int = 10_000,
     win_prob_improvement_threshold: float = 0.01,
     rng: np.random.Generator | None = None,
+    distribution: Distribution = "normal",
+    team_correlation: float = 0.0,
 ) -> FlexRecommendation:
     rng = rng or np.random.default_rng()
     candidates = enumerate_flex_candidates(my_lineup, lineup_slots)
@@ -73,13 +75,13 @@ def find_best_flex_lineup(
     # not just an optimization. Without it, two lineups with genuinely equal
     # win probability could rank differently purely from independent MC
     # sampling noise between separate opponent draws.
-    opponent_totals = simulate_side(opponent_starter_projections, n_sims, rng)
+    opponent_totals = simulate_side(opponent_starter_projections, n_sims, rng, distribution, team_correlation)
 
     current_flex_keys = {_player_key(mp) for mp in my_lineup if mp.player.slot_position == "FLEX"}
 
     scored = []
     for candidate in candidates:
-        my_totals = simulate_side([project_fn(mp) for mp in candidate], n_sims, rng)
+        my_totals = simulate_side([project_fn(mp) for mp in candidate], n_sims, rng, distribution, team_correlation)
         win_prob = float((my_totals > opponent_totals).mean())
         flex_keys = {_player_key(mp) for mp in candidate if mp.player.slot_position in ("FLEX", "BE")}
         scored.append((candidate, win_prob, flex_keys))

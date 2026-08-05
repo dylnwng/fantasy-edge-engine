@@ -45,6 +45,7 @@ class PlayerProjection:
     player_id: str | None
     name: str
     position: str
+    team: str  # used to group teammates for the Monte Carlo engine's shared-game-script correlation
     mean: float
     std: float
     source: str  # "bye" | "final" | "model" | "model_position_std_fallback" | "espn_projection_only"
@@ -94,11 +95,11 @@ def resolve_projection(
     p = matchup_player.player
 
     if matchup_player.on_bye:
-        return PlayerProjection(p.player_id, p.name, p.position, 0.0, 0.0, "bye", "on bye this week")
+        return PlayerProjection(p.player_id, p.name, p.position, p.team, 0.0, 0.0, "bye", "on bye this week")
 
     if matchup_player.game_final:
         return PlayerProjection(
-            p.player_id, p.name, p.position, matchup_player.actual_points, 0.0, "final",
+            p.player_id, p.name, p.position, p.team, matchup_player.actual_points, 0.0, "final",
             "game already final this week -- using actual points, not a projection",
         )
 
@@ -118,17 +119,20 @@ def resolve_projection(
                 else "fewer than 2 games played this season -- falling back to ESPN's own "
                      "projection with a position-average std"
             )
-        return PlayerProjection(p.player_id, p.name, p.position, matchup_player.espn_projected_points, std, "espn_projection_only", note)
+        return PlayerProjection(
+            p.player_id, p.name, p.position, p.team, matchup_player.espn_projected_points, std,
+            "espn_projection_only", note,
+        )
 
     predicted_score, trailing_std = entry
     if trailing_std is None:
         std = position_avg_std.get(p.position, sim_config.untracked_position_std)
         return PlayerProjection(
-            p.player_id, p.name, p.position, predicted_score, std, "model_position_std_fallback",
+            p.player_id, p.name, p.position, p.team, predicted_score, std, "model_position_std_fallback",
             f"fewer than {sim_config.min_games_for_variance} trailing games -- using position-average "
             "std instead of this player's own",
         )
-    return PlayerProjection(p.player_id, p.name, p.position, predicted_score, trailing_std, "model", "")
+    return PlayerProjection(p.player_id, p.name, p.position, p.team, predicted_score, trailing_std, "model", "")
 
 
 def build_projections(

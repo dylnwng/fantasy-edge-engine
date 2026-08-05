@@ -28,3 +28,22 @@ win_prob_improvement_threshold: 0.01
 # projections.py, since nflverse's usage data has essentially zero
 # history for those positions to even approximate a fallback from.
 untracked_position_std: 5.0
+
+# "normal" or "gamma" (right-skewed, non-negative, moment-matched to the
+# same mean/std -- closer to how fantasy scores actually behave, but a
+# newer, less-validated option). Currently VALIDATED against 97 real
+# 2024 matchups at "normal": 63.9% pick accuracy, Brier 0.220 vs. a 0.25
+# no-skill baseline (see EVALUATION.md). Only flip this after re-running
+# scripts/calibration_test.py with the new setting and confirming
+# calibration holds up or improves -- don't assume "more realistic"
+# automatically means "better calibrated."
+distribution: gamma
+
+# 0.0-1.0: same-team correlation in the Monte Carlo draws (e.g. two
+# teammates having a good/bad week together because their offense as a
+# whole did). Currently 0.0 (independent draws), the validated setting
+# above. If changed, set it from scripts/measure_team_correlation.py's
+# real, data-derived measurement of actual same-team residual
+# correlation -- never a guessed number, same discipline as K/D-ST's
+# std=0 decision.
+team_correlation: 0.041

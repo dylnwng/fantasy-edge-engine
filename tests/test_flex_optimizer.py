@@ -12,7 +12,8 @@ def _mp(name, position, slot):
 
 
 def _proj(mp_obj, mean, std):
-    return PlayerProjection(mp_obj.player.player_id, mp_obj.player.name, mp_obj.player.position, mean, std, "model", "")
+    p = mp_obj.player
+    return PlayerProjection(p.player_id, p.name, p.position, p.team, mean, std, "model", "")
 
 
 LINEUP_SLOTS_ONE_FLEX = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 1, "K": 1, "DST": 1, "BENCH": 2}
@@ -73,7 +74,7 @@ def test_find_best_flex_lineup_picks_the_analytically_obvious_swap():
         mean, std = projections[mp.player.name]
         return _proj(mp, mean, std)
 
-    opponent_projections = [PlayerProjection(f"o{i}", f"Opp{i}", "RB", 10.0, 4.0, "model", "") for i in range(7)]
+    opponent_projections = [PlayerProjection(f"o{i}", f"Opp{i}", "RB", "OPP", 10.0, 4.0, "model", "") for i in range(7)]
 
     rec = find_best_flex_lineup(
         lineup, opponent_projections, project_fn, LINEUP_SLOTS_ONE_FLEX,
@@ -101,7 +102,7 @@ def test_find_best_flex_lineup_no_improvement_when_current_is_already_best():
         mean, std = projections[mp.player.name]
         return _proj(mp, mean, std)
 
-    opponent_projections = [PlayerProjection(f"o{i}", f"Opp{i}", "RB", 10.0, 4.0, "model", "") for i in range(7)]
+    opponent_projections = [PlayerProjection(f"o{i}", f"Opp{i}", "RB", "OPP", 10.0, 4.0, "model", "") for i in range(7)]
 
     rec = find_best_flex_lineup(
         lineup, opponent_projections, project_fn, LINEUP_SLOTS_ONE_FLEX,

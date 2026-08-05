@@ -49,7 +49,10 @@ def main() -> None:
     my_projections = build_projections(my_starters, season, snapshot.week, sim_config)
     opponent_projections = build_projections(opponent_starters, season, snapshot.week, sim_config)
 
-    result = simulate_matchup(my_projections, opponent_projections, n_sims=sim_config.n_sims)
+    result = simulate_matchup(
+        my_projections, opponent_projections, n_sims=sim_config.n_sims,
+        distribution=sim_config.distribution, team_correlation=sim_config.team_correlation,
+    )
     print(
         f"Win probability: {result.my_win_probability:.1%}  "
         f"(median {result.my_score_p50:.1f} vs {result.opponent_mean_score:.1f}, "
@@ -64,6 +67,7 @@ def main() -> None:
         source.get_league_config().lineup_slots,
         n_sims=sim_config.n_sims,
         win_prob_improvement_threshold=sim_config.win_prob_improvement_threshold,
+        distribution=sim_config.distribution, team_correlation=sim_config.team_correlation,
     )
 
     print()
