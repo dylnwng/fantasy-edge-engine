@@ -141,11 +141,49 @@ never really built for.
   yardage-threshold bonuses (e.g. "+3 for 100 rushing yards") — unsupported bonus keys
   warn rather than silently being ignored.
 
+## Real-world sanity check: the live ESPN connector against a season that already happened
+
+Everything above is a backtest — real data, but evaluated in aggregate across 2,355
+player-weeks. As a qualitative gut-check, I ran the full pipeline (live ESPN connector →
+opportunity model → injury context → roster-fit re-ranking) against my own actual league
+on ESPN, pointed at the completed 2024 season, so the free-agent pool and roster came
+from a real league instead of a hand-built example CSV.
+
+The connector correctly authenticated against the real league, correctly identified my
+team (`team_id=2` → "Dylan", cross-checked against all 12 teams), correctly read the
+league's actual settings (full PPR, waiver *priority* rather than FAAB — it doesn't
+assume the more common system), and pulled a real 16-player roster with real
+nflverse-matched player IDs.
+
+The output isn't just plausible — specific top-ranked flags line up with things that
+verifiably happened in the 2024 season:
+
+- **Rashee Rice (WR, KC)** — flagged on "target share 26% → 39% (up)." He genuinely had
+  that exact breakout in real life, shortly before a season-ending ACL/LCL injury.
+- **Jordan Mason (RB, SF)** — flagged on "snap share 28% → 86% (up)," about as large a
+  real usage jump as exists. He really did take over as the 49ers' starter when
+  Christian McCaffrey went down.
+- **Isaiah Davis (RB, NYJ)** — flagged with injury context: "coincides with Breece Hall
+  (Doubtful, Knee)." Breece Hall genuinely battled a knee injury that season — requirement
+  3b's earned-vs-injury-driven distinction correctly linked the backup's opportunity to
+  the real starter's real injury, not a coincidence I set up.
+- **Tyler Goodson (RB, IND)** — same pattern: flagged alongside "Jonathan Taylor (Out,
+  Ankle)," who really did miss time that year.
+
+This isn't a substitute for the backtest above — it's one league, one season, eyeballed
+against storylines I happen to remember, not a statistic. But it's evidence the pieces
+compose correctly against messy real-world data (real ESPN auth, real league settings,
+real player-name matching) and not just against the clean historical tables used during
+development, and that the specific signals it's flagging correspond to things that
+actually happened, not noise that merely looks plausible in a table.
+
 ## Bottom line
 
 The model beats a naive rolling-average baseline by a real but modest margin (~10% MAE
 improvement), and its flagged list — the actual decision-relevant output — hits at
 72–82% depending on the evaluation window, on a season it never saw during training.
+Run against a real league on real ESPN infrastructure, its top flags line up with
+specific, verifiable 2024 storylines rather than just looking reasonable in a table.
 That's not a large, dramatic edge. It's a legitimate, honestly-measured one, arrived at
 by building an evaluation harness rigorous enough to catch and correct my own modeling
 mistake along the way — which is the actual point of the exercise.
