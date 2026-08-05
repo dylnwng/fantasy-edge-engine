@@ -1,0 +1,9 @@
+# Small weekly update — NOT a full league_config re-entry. Update these
+# three values each week when you refresh my_roster.csv / free_agents.csv.
+#
+# as_of_week / as_of_date exist so the ranking output can show how stale
+# the roster data is, instead of silently using a forgotten update.
+
+as_of_week: 1
+as_of_date: 2026-09-08
+remaining_faab: 100

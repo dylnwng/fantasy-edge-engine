@@ -1,0 +1,41 @@
+# One-time-per-season league configuration. Fill in once before Week 1;
+# no need to touch this again during the season except at year rollover.
+# See data/roster_state/README.md for the full format reference.
+
+season: 2026
+
+scoring:
+  ppr_type: full_ppr # standard | half_ppr | full_ppr
+  # Any league-specific bonuses on top of the base ppr_type scoring.
+  # Keys are free-form stat names — the opportunity model (requirement 3)
+  # will define which ones it understands; unrecognized ones are ignored
+  # until then, not an error.
+  bonuses: {}
+  # example:
+  #   bonuses:
+  #     pass_td: 4
+  #     rush_td: 6
+  #     rec_td: 6
+  #     bonus_100_rush_yards: 3
+
+# Starting lineup slot counts — used by requirement 5 (roster-fit
+# re-ranking) to judge position scarcity relative to what your league
+# actually starts, not just raw roster depth. Edit to match your league.
+lineup_slots:
+  QB: 1
+  RB: 2
+  WR: 2
+  TE: 1
+  FLEX: 1
+  DST: 1
+  K: 1
+  BENCH: 6
+
+waivers:
+  system: FAAB # FAAB | priority
+  season_budget: 100
+  min_bid: 1
+  clear_day: Wednesday
+  # What happens to a player nobody bid on: they clear waivers unclaimed
+  # and become first-come-first-available with no bid required.
+  post_clear_rule: first_come_first_available

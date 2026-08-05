@@ -1,0 +1,33 @@
+# Opportunity model configuration (requirement 3). Not hardcoded in code
+# so it can be re-tuned without touching train.py/predict.py.
+
+# Validated on a held-out SEASON, not held-out weeks within a season —
+# within-season weeks are correlated (a hot player stays hot for a few
+# weeks), so a week-level split would leak signal and overstate accuracy.
+train_seasons: [2018, 2019, 2020, 2021, 2022, 2023]
+validation_season: 2024
+
+# Trailing window (in games actually played, not calendar weeks) used to
+# build usage-trend features. PRD calls for 2-3 weeks; 2 means the model
+# has no signal in a season's first 2 games and first becomes useful in
+# week 3, matching "most useful from Week 3 onward" in the PRD.
+trailing_window: 2
+
+# Points above the naive baseline (trailing average fantasy points)
+# required before a player is flagged as a breakout candidate. This is
+# the precision-over-recall lever: raise it for a shorter, higher-trust
+# list; lower it to see more candidates. Re-run
+# `python -m edge_engine.model.train` after changing it and check the
+# reported hit rate on the validation season.
+flag_margin: 3.0
+
+# req 3b (injury context): a same-position teammate counts as "ahead of"
+# a candidate if their trailing snap_pct beats the candidate's by at
+# least this much over injury_lookback_weeks prior weeks. Then, if that
+# teammate shows up on the injury report (Questionable/Doubtful/Out)
+# within the same lookback window, the candidate's usage spike gets
+# flagged as possibly injury-driven rather than an earned role change.
+# This never predicts when the injured starter returns -- it only
+# surfaces the coincidence for the user to weigh.
+injury_ahead_usage_gap: 0.15
+injury_lookback_weeks: 2
