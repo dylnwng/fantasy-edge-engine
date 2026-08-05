@@ -13,3 +13,5 @@ streamlit==1.61.0
 # starlette's latest 1.x (GZipResponder gained a required kwarg it doesn't
 # pass) -- an unpinned install resolves the incompatible latest version.
 starlette==0.47.2
+espn_api==0.46.0
+python-dotenv==1.2.2

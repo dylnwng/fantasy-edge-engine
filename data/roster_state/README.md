@@ -58,3 +58,13 @@ named "Josh Allen"). If a row doesn't resolve, it still comes back from
 `get_rostered_players()` / `get_free_agents()` with `match_status` set to
 `"unmatched"` or `"ambiguous"` and a `match_note` explaining why, rather
 than being silently dropped — check those before trusting a weekly run.
+
+## Swapping in the live ESPN connector
+
+This manual/CSV source is one implementation of `RosterStateSource`. There's
+a second one, `edge_engine.roster.espn_source.EspnRosterStateSource`, that
+pulls your actual roster, free-agent pool, and league settings live from
+ESPN instead of these files — same interface, nothing downstream changes.
+Set `EDGE_ENGINE_ROSTER_SOURCE=espn` plus your league's values in `.env`
+(copy `.env.example` at the project root) to switch. See that file's
+comments for exactly how to find your league ID, team ID, and auth cookies.

@@ -7,9 +7,17 @@ ranking code.
 
 from __future__ import annotations
 
+import os
 from typing import Protocol
 
+from dotenv import load_dotenv
+
 from edge_engine.roster.models import LeagueConfig, Player, RosterMeta
+
+# Loads ESPN_* / EDGE_ENGINE_ROSTER_SOURCE from a gitignored .env at the
+# project root, if present. Safe to call repeatedly; a no-op if there's
+# no .env or the vars are already set in the real environment.
+load_dotenv()
 
 
 class RosterStateSource(Protocol):
@@ -20,8 +28,21 @@ class RosterStateSource(Protocol):
 
 
 def get_default_source() -> RosterStateSource:
-    """The active roster-state source. Swap this to change data sources
-    everywhere at once (e.g. to a live ESPN connector in a later phase)."""
+    """The active roster-state source, chosen by EDGE_ENGINE_ROSTER_SOURCE
+    ("manual", the default, or "espn"). This is the one place that
+    decision gets made -- everything downstream only ever depends on the
+    RosterStateSource protocol above, never on which implementation is
+    active, so flipping this env var is the entire migration."""
+    source = os.environ.get("EDGE_ENGINE_ROSTER_SOURCE", "manual").lower()
+
+    if source == "espn":
+        from edge_engine.roster.espn_source import EspnRosterStateSource
+
+        return EspnRosterStateSource()
+
+    if source != "manual":
+        raise ValueError(f"Unknown EDGE_ENGINE_ROSTER_SOURCE={source!r} (expected 'manual' or 'espn')")
+
     from edge_engine.roster.manual_source import ManualRosterStateSource
 
     return ManualRosterStateSource()

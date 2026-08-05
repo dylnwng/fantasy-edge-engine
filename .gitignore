@@ -6,3 +6,4 @@ data/raw/
 data/processed/
 models/
 .pytest_cache/
+.env
