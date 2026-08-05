@@ -177,13 +177,77 @@ real player-name matching) and not just against the clean historical tables used
 development, and that the specific signals it's flagging correspond to things that
 actually happened, not noise that merely looks plausible in a table.
 
+## Matchup simulator calibration: does the win probability actually mean anything?
+
+The opportunity model above answers "who should I add." A separate Phase 2 feature (the
+Monte Carlo matchup simulator) answers "who should I start," by simulating a lineup
+against a real opponent thousands of times and reporting a win probability. That number
+is only useful if it's calibrated — a "70% win probability" should mean roughly a 70%
+real-world win rate, not just a confident-sounding label.
+
+A first spot-check across 3 individual weeks (reported in an earlier draft of this
+project) turned out not to actually test this: since it queried a season that's long
+over, every player resolved through the simulator's deterministic "game already final"
+shortcut, so every simulated outcome collapsed to exactly 0% or 100% — that tested the
+FLEX optimizer's search logic, but never touched the actual probabilistic engine.
+
+To test the real thing, I re-ran it across **97 real matchups spanning the entire
+2024 league** (all ~6-7 matchups/week, weeks 4-17 — not just my own team's ~14), with the
+"already final" shortcut deliberately stripped so every player is forced through the same
+model + variance-based projection a live, pre-game query would actually use.
+
+| Metric | Result | No-skill baseline |
+|---|---|---|
+| Pick accuracy (favored side actually won) | **63.9%** (62/97) | 50% |
+| Brier score | **0.220** | 0.25 |
+| Log loss | **0.623** | 0.693 |
+
+And a calibration table — predicted probability bucket vs. how often the favored side
+actually won in that bucket:
+
+| Predicted | n | Actual win rate |
+|---|---|---|
+| 0.3–0.4 | 17 | 0.41 |
+| 0.4–0.5 | 19 | 0.47 |
+| 0.5–0.6 | 16 | 0.56 |
+| 0.6–0.7 | 18 | 0.78 |
+| 0.7–0.8 | 8 | 0.38 |
+
+The well-sampled middle buckets (n=16-19) track closely — predicted 0.45 lines up with an
+actual 0.47, predicted 0.54 with an actual 0.56. The one bucket that looks off (0.7-0.8
+predicted vs. 0.38 actual) has only 8 observations, and — importantly — the *adjacent*
+bucket (0.6-0.7) swings the opposite direction (actual *higher* than predicted). A
+genuine "the model is overconfident at high probabilities" bug would show a consistent
+downward pattern across 0.6-0.9, not one outlier bucket bracketed by two that calibrate
+fine. I did not "fix" this by inflating variance to flatten that one bucket — doing so
+would have degraded the buckets that are already well-calibrated to chase noise from a
+sample of 8.
+
+**Two real bugs surfaced building this test, not in the simulator's core logic but in a
+week-scoping assumption that would have quietly undermined both this test and the
+`--week` flag's own advertised "check a past week" use case:**
+
+1. The model's scoring function (`score_latest_week`) picked each player's single most
+   recent trailing snapshot from the *entire* ingested file, not "as of before the week
+   being asked about." Harmless for true live use (there's no future data yet to leak),
+   but wrong for any retrospective query once later weeks are ingested — exactly the
+   `--week` flag's own use case, and exactly what this calibration test needed to do
+   correctly. Fixed by adding `score_as_of_week(season, week)`, which restricts training
+   data to strictly before the target week; `score_latest_week()` is now a thin wrapper
+   around it and produces byte-identical output for true live queries (verified directly).
+2. Asking for a week with genuinely insufficient trailing history crashed several pandas
+   frames deep with a cryptic `IndexError` instead of failing cleanly. Fixed to return an
+   empty result immediately.
+
 ## Bottom line
 
 The model beats a naive rolling-average baseline by a real but modest margin (~10% MAE
 improvement), and its flagged list — the actual decision-relevant output — hits at
 72–82% depending on the evaluation window, on a season it never saw during training.
 Run against a real league on real ESPN infrastructure, its top flags line up with
-specific, verifiable 2024 storylines rather than just looking reasonable in a table.
-That's not a large, dramatic edge. It's a legitimate, honestly-measured one, arrived at
-by building an evaluation harness rigorous enough to catch and correct my own modeling
-mistake along the way — which is the actual point of the exercise.
+specific, verifiable 2024 storylines rather than just looking reasonable in a table. The
+separate matchup simulator's win probabilities are honestly calibrated against 97 real
+outcomes, not just directionally plausible. None of this is a large, dramatic edge. It's
+a legitimate, honestly-measured one, arrived at by building an evaluation harness rigorous
+enough to catch and correct my own modeling mistakes along the way — which is the actual
+point of the exercise.

@@ -27,7 +27,7 @@ from typing import Callable
 import pandas as pd
 
 from edge_engine.model.config import load_model_config
-from edge_engine.model.predict import score_latest_week
+from edge_engine.model.predict import score_as_of_week
 from edge_engine.model.scoring import compute_points_for_seasons
 from edge_engine.model.variance import compute_trailing_points_std
 from edge_engine.roster.interface import get_default_source
@@ -51,18 +51,24 @@ class PlayerProjection:
     note: str  # non-empty whenever source != "model"
 
 
-def _scored_lookup(sim_config: SimulationConfig) -> tuple[dict[str, tuple[float, float | None]], dict[str, float]]:
-    """Runs score_latest_week() + compute_trailing_points_std() once.
-    Returns (player_id -> (predicted_score, trailing_points_std_or_None),
-    position -> average available trailing_points_std)."""
+def _scored_lookup(
+    season: int, week: int, sim_config: SimulationConfig
+) -> tuple[dict[str, tuple[float, float | None]], dict[str, float]]:
+    """Runs score_as_of_week(season, week) + compute_trailing_points_std()
+    once, scoped to only data knowable before `week` -- not "whatever's
+    latest in the whole file" (see predict.py's score_as_of_week
+    docstring for why that distinction matters here specifically: this
+    is exactly what powers the --week flag's "what would we have said
+    before week N" use case). Returns (player_id -> (predicted_score,
+    trailing_points_std_or_None), position -> average available
+    trailing_points_std)."""
     model_config = load_model_config()
-    scored = score_latest_week(model_config)
+    scored = score_as_of_week(season, week, model_config)
     if scored.empty:
         return {}, {}
 
     league_config = get_default_source().get_league_config()
-    latest_season = int(scored["season"].max())
-    points_table = compute_points_for_seasons([latest_season], league_config.scoring)
+    points_table = compute_points_for_seasons([season], league_config.scoring)
     std_table = compute_trailing_points_std(
         points_table, window=sim_config.variance_window, min_games=sim_config.min_games_for_variance
     )
@@ -127,21 +133,31 @@ def resolve_projection(
 
 def build_projections(
     matchup_players: list[MatchupPlayer],
+    season: int,
+    week: int,
     sim_config: SimulationConfig | None = None,
 ) -> list[PlayerProjection]:
-    """Resolves every player in `matchup_players` to a PlayerProjection.
-    Runs the expensive lookups (score_latest_week, variance) once, not
-    once per player."""
+    """Resolves every player in `matchup_players` to a PlayerProjection for
+    the matchup being played in `week` of `season`. Runs the expensive
+    lookups (score_as_of_week, variance) once, not once per player.
+
+    `season`/`week` matter: they scope the model's trailing-data lookup
+    to only what was knowable before this specific week (see
+    score_as_of_week), not just "whatever's most recent in the ingested
+    file" -- required for the --week flag to mean what it says."""
     sim_config = sim_config or load_simulation_config()
-    scored_by_player_id, position_avg_std = _scored_lookup(sim_config)
+    scored_by_player_id, position_avg_std = _scored_lookup(season, week, sim_config)
     return [resolve_projection(mp, scored_by_player_id, position_avg_std, sim_config) for mp in matchup_players]
 
 
-def make_projection_fn(sim_config: SimulationConfig | None = None) -> Callable[[MatchupPlayer], PlayerProjection]:
-    """Runs the expensive score_latest_week()/variance lookups once, then
-    returns a callable resolving individual players against that fixed
-    snapshot -- for the FLEX optimizer, which needs a projection per
-    candidate lineup without re-running those lookups each time."""
+def make_projection_fn(
+    season: int, week: int, sim_config: SimulationConfig | None = None
+) -> Callable[[MatchupPlayer], PlayerProjection]:
+    """Runs the expensive score_as_of_week()/variance lookups once (scoped
+    to `season`/`week` -- see build_projections), then returns a callable
+    resolving individual players against that fixed snapshot -- for the
+    FLEX optimizer, which needs a projection per candidate lineup without
+    re-running those lookups each time."""
     sim_config = sim_config or load_simulation_config()
-    scored_by_player_id, position_avg_std = _scored_lookup(sim_config)
+    scored_by_player_id, position_avg_std = _scored_lookup(season, week, sim_config)
     return lambda mp: resolve_projection(mp, scored_by_player_id, position_avg_std, sim_config)

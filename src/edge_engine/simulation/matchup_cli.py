@@ -42,11 +42,12 @@ def main() -> None:
     print(f"Week {snapshot.week}: {snapshot.my_team_name} vs {snapshot.opponent_team_name}")
     print()
 
+    season = source.get_league_config().season
     my_starters = _starters(snapshot.my_lineup)
     opponent_starters = _starters(snapshot.opponent_lineup)
 
-    my_projections = build_projections(my_starters, sim_config)
-    opponent_projections = build_projections(opponent_starters, sim_config)
+    my_projections = build_projections(my_starters, season, snapshot.week, sim_config)
+    opponent_projections = build_projections(opponent_starters, season, snapshot.week, sim_config)
 
     result = simulate_matchup(my_projections, opponent_projections, n_sims=sim_config.n_sims)
     print(
@@ -55,7 +56,7 @@ def main() -> None:
         f"range {result.my_score_p10:.1f}-{result.my_score_p90:.1f})"
     )
 
-    project_fn = make_projection_fn(sim_config)
+    project_fn = make_projection_fn(season, snapshot.week, sim_config)
     recommendation = find_best_flex_lineup(
         snapshot.my_lineup,
         opponent_projections,
