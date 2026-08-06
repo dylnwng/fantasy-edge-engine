@@ -40,6 +40,72 @@ class InjuryContext:
     teammate_status: str | None
     teammate_injury: str | None
     explanation: str
+    # "worsening" | "stable" | "improving" | None (not enough reports to
+    # compare). Defaulted so existing positional construction elsewhere
+    # keeps working unchanged.
+    blocker_trajectory: str | None = None
+
+
+def blocker_status_trajectory(
+    injuries: pd.DataFrame, gsis_id: str, season: int, week: int, lookback: int
+) -> str | None:
+    """Which direction the blocker's *official designation* has moved
+    across their two most recent reports in the window: "improving"
+    (Out -> Questionable), "worsening" (Questionable -> Out), or
+    "stable".
+
+    This is the single most decision-relevant thing requirement 3b was
+    missing. Knowing a usage spike is injury-driven doesn't tell you
+    whether to spend FAAB on it -- a backup whose blocker is trending
+    Out -> Out has a window that's still open, while one whose blocker
+    is trending Out -> Questionable has a window that's about to slam
+    shut. Same pickup on paper, opposite bets.
+
+    Deliberately does NOT infer recovery from *absence* from the injury
+    report. load_injury_reports() only keeps rows carrying a game-status
+    designation, so a player missing from a given week might be healthy
+    OR might just have had a practice-only report that week -- treating
+    absence as "cleared" would manufacture a confident signal out of
+    missing data, the same failure mode already fixed in bye_weeks.py.
+    Only weeks where the blocker actually carries a designation are
+    compared.
+
+    Reports an observed direction; never predicts a return date -- the
+    PRD's requirement 3b explicitly scopes that out ("it surfaces the
+    injury context, the user applies judgment")."""
+    reports = injuries[
+        (injuries["season"] == season)
+        & (injuries["gsis_id"] == gsis_id)
+        & (injuries["week"] <= week)
+        & (injuries["week"] >= week - lookback)
+    ].sort_values("week")
+
+    if len(reports) < 2:
+        return None
+
+    latest = _STATUS_SEVERITY.get(reports["report_status"].iloc[-1])
+    previous = _STATUS_SEVERITY.get(reports["report_status"].iloc[-2])
+    if latest is None or previous is None:
+        return None
+
+    if latest < previous:
+        return "improving"
+    if latest > previous:
+        return "worsening"
+    return "stable"
+
+
+_TRAJECTORY_NOTE = {
+    "improving": (
+        "Their designation has been improving week over week — the opportunity window "
+        "may be closing sooner than the usage trend alone suggests."
+    ),
+    "worsening": (
+        "Their designation has been worsening week over week — the opportunity window "
+        "may stay open longer."
+    ),
+    "stable": "Their designation has been unchanged week over week.",
+}
 
 
 def load_injury_reports(seasons: list[int], force_refresh: bool = False) -> pd.DataFrame:
@@ -129,10 +195,16 @@ def get_injury_context(
         f"who had the higher usage share as of week {int(top['week'])} — "
         "may be an injury-driven opportunity rather than an earned role change."
     )
+
+    trajectory = blocker_status_trajectory(injuries, top["gsis_id"], season, week, lookback)
+    if trajectory:
+        explanation = f"{explanation} {_TRAJECTORY_NOTE[trajectory]}"
+
     return InjuryContext(
         has_injury_context=True,
         teammate_name=top["full_name"],
         teammate_status=top["report_status"],
         teammate_injury=top["report_primary_injury"] if pd.notna(top["report_primary_injury"]) else None,
         explanation=explanation,
+        blocker_trajectory=trajectory,
     )

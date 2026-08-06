@@ -105,9 +105,17 @@ them:
 
 ```bash
 python -m edge_engine.ranking.roster_fit                # free-agent rankings only
+python -m edge_engine.ranking.roster_fit --top 20        # top 20 regardless of tier
+python -m edge_engine.ranking.roster_fit --all           # every candidate, no truncation
 python -m edge_engine.simulation.matchup_cli             # this week's actual matchup
 python -m edge_engine.simulation.matchup_cli --week 15   # or any past week, e.g. for a post-mortem
 ```
+
+Rankings show **High/Medium-confidence candidates only** by default. A real live run
+produced 293 ranked free agents — 5 High, 38 Medium, 249 Low — so printing everything
+means 85% of the weekly output is the tool's own "$1 speculative claim" tier scrolling
+past the handful of names actually worth a bid. `--all` (on either `weekly` or
+`roster_fit`) gets the full list back.
 
 ## Project layout
 
@@ -149,4 +157,4 @@ scope boundary rather than an oversight.
 pytest
 ```
 
-101 tests, no live network calls or credentials required.
+153 tests, no live network calls or credentials required.

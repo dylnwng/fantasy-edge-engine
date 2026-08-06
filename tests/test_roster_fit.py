@@ -107,3 +107,68 @@ def test_negative_lineup_slots_does_not_invert_the_ranking():
 
     assert result.scarcity_multiplier >= 0.0
     assert result.roster_fit_score >= 0.0
+
+
+def _fit_candidate(name, tier, score):
+    from edge_engine.ranking.roster_fit import RosterFitCandidate
+
+    return RosterFitCandidate(
+        candidate=RankedFreeAgent(
+            player_id=name, name=name, position="RB", team="AAA", season=2023, week=5,
+            predicted_score=score, baseline_score=score - 5, confidence_tier=tier,
+            explanation="placeholder",
+        ),
+        roster_fit_score=score,
+        scarcity_multiplier=1.0,
+        position_need=1.0,
+        rostered_count_at_position=0,
+        bye_week_collision=None,
+        final_explanation="placeholder",
+    )
+
+
+def test_default_view_shows_only_actionable_tiers():
+    # A real live run produced 293 candidates: 5 High, 38 Medium, 249
+    # Low. Printing all of them buries the handful worth a bid.
+    from edge_engine.ranking.roster_fit import select_visible
+
+    results = [
+        _fit_candidate("A", "High", 30.0),
+        _fit_candidate("B", "Medium", 20.0),
+        _fit_candidate("C", "Low", 10.0),
+        _fit_candidate("D", "Low", 9.0),
+    ]
+    visible, omitted = select_visible(results)
+
+    assert [r.candidate.name for r in visible] == ["A", "B"]
+    assert omitted == 2
+
+
+def test_all_flag_shows_everything_and_omits_nothing():
+    from edge_engine.ranking.roster_fit import select_visible
+
+    results = [_fit_candidate("A", "High", 30.0), _fit_candidate("C", "Low", 10.0)]
+    visible, omitted = select_visible(results, show_all=True)
+
+    assert len(visible) == 2
+    assert omitted == 0
+
+
+def test_top_n_ignores_tier_and_reports_the_remainder():
+    from edge_engine.ranking.roster_fit import select_visible
+
+    results = [_fit_candidate(n, "Low", s) for n, s in [("A", 30.0), ("B", 20.0), ("C", 10.0)]]
+    visible, omitted = select_visible(results, top=2)
+
+    assert [r.candidate.name for r in visible] == ["A", "B"]
+    assert omitted == 1
+
+
+def test_no_actionable_candidates_still_reports_how_many_were_hidden():
+    from edge_engine.ranking.roster_fit import select_visible
+
+    results = [_fit_candidate("C", "Low", 10.0), _fit_candidate("D", "Low", 9.0)]
+    visible, omitted = select_visible(results)
+
+    assert visible == []
+    assert omitted == 2

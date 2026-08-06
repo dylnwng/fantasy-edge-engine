@@ -19,6 +19,7 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass
 from datetime import date
 
@@ -115,9 +116,35 @@ def apply_roster_fit(
     return results
 
 
-def _print_table(results: list[RosterFitCandidate]) -> None:
+ACTIONABLE_TIERS = ("High", "Medium")
+
+
+def select_visible(
+    results: list[RosterFitCandidate], top: int | None = None, show_all: bool = False
+) -> tuple[list[RosterFitCandidate], int]:
+    """Returns (rows to print, how many were omitted).
+
+    Default is the actionable tiers only. A real run against a live ESPN
+    league produced 293 ranked candidates -- 5 High, 38 Medium, 249 Low
+    -- so printing everything means 85% of the weekly output is the tool's
+    own "Low confidence, $1 speculative claim" tier scrolling past the
+    handful of names actually worth a bid. That's the precision-over-recall
+    philosophy the PRD picked (a short, high-trust list), applied to the
+    output and not just the model."""
+    if show_all:
+        return results, 0
+    if top is not None:
+        return results[:top], max(0, len(results) - top)
+    visible = [r for r in results if r.candidate.confidence_tier in ACTIONABLE_TIERS]
+    return visible, len(results) - len(visible)
+
+
+def _print_table(results: list[RosterFitCandidate], omitted: int = 0) -> None:
     if not results:
-        print("(no free-agent candidates to rank)")
+        if omitted:
+            print(f"(no High/Medium-confidence candidates this week — {omitted} Low-tier candidates hidden; --all to see them)")
+        else:
+            print("(no free-agent candidates to rank)")
         return
     header = (
         f"{'Rank':<5}{'Player':<22}{'Pos':<5}{'Team':<6}"
@@ -132,9 +159,39 @@ def _print_table(results: list[RosterFitCandidate]) -> None:
             f"{c.predicted_score:<11.1f}{r.scarcity_multiplier:<7.2f}{r.roster_fit_score:<8.1f}"
             f"{c.confidence_tier:<8}{r.final_explanation}"
         )
+    if omitted:
+        print(f"\n({omitted} lower-confidence candidate(s) hidden — use --all to see the full list)")
 
 
-def main() -> None:
+def _print_unresolved(unresolved: list[Player], show_all: bool) -> None:
+    """Unresolved free agents are surfaced, never silently dropped (a
+    standing requirement) -- but a live ESPN league produced 25 of them,
+    mostly practice-squad names nflverse has no usage data for at all.
+    Collapsed to a count by default so it doesn't bury the actual
+    rankings; --all prints every one."""
+    if not unresolved:
+        return
+    print(f"\n{len(unresolved)} free agent(s) did not resolve and are excluded above — check spelling/team:")
+    shown = unresolved if show_all else unresolved[:5]
+    for p in shown:
+        print(f"  {p.name} ({p.position}, {p.team}) [{p.match_status}: {p.match_note}]")
+    if len(shown) < len(unresolved):
+        print(f"  ...and {len(unresolved) - len(shown)} more (--all to see them)")
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--top", type=int, default=None,
+        help="show the top N candidates by roster-fit score, regardless of confidence tier",
+    )
+    group.add_argument(
+        "--all", action="store_true",
+        help="show every ranked candidate (default: High/Medium-confidence tiers only)",
+    )
+    args = parser.parse_args(argv)
+
     config = load_model_config()
     source = get_default_source()
     meta = source.get_roster_meta()
@@ -154,12 +211,9 @@ def main() -> None:
     }
 
     results = apply_roster_fit(candidates, league_config, rostered, bye_weeks_by_player_id)
-    _print_table(results)
-
-    if unresolved:
-        print(f"\n{len(unresolved)} free agent(s) did not resolve and are excluded above — check spelling/team:")
-        for p in unresolved:
-            print(f"  {p.name} ({p.position}, {p.team}) [{p.match_status}: {p.match_note}]")
+    visible, omitted = select_visible(results, top=args.top, show_all=args.all)
+    _print_table(visible, omitted)
+    _print_unresolved(unresolved, show_all=args.all)
 
 
 if __name__ == "__main__":

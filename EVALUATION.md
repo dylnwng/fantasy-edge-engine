@@ -295,6 +295,54 @@ the correlation value going into it is a real, measured number rather than an in
 one. If a future, larger calibration run shows this was the wrong call, that's a decision
 this same test can revisit and reverse just as easily.
 
+## A third experiment: does the *shape* of a usage climb matter?
+
+The trend feature the model has always used is an endpoint delta — `s - s.shift(window)`.
+That means these two players are literally indistinguishable to it:
+
+| | wk 1 | wk 2 | wk 3 | wk 4 | trend |
+|---|---|---|---|---|---|
+| Player A | 20% | 20% | 20% | 60% | +40 |
+| Player B | 20% | 33% | 46% | 60% | +40 |
+
+A is the classic waiver trap — one blowout or garbage-time game that reverts next week. B
+is the progressive role change the whole tool exists to catch early. Same number.
+
+So I added two features describing the *shape* of the climb (`persistence.py`): a
+consecutive-rising-weeks streak, and the fraction of recent week-over-week deltas that
+were positive, for snap share and target share. Deliberately only two usage columns, not
+all five — ten new features on ~10k usable training rows is a real overfitting risk, and
+the position-split experiment already showed this model is sensitive to how it's sliced.
+
+Same A/B protocol as the DvP experiment, against the same held-out 2024 season:
+
+| | With persistence | General model (same rows) |
+|---|---|---|
+| MAE | 5.08 | 5.10 |
+| Hit rate | **73.5%** (n=313) | 71.6% (n=317) |
+
+Both metrics moved the right direction this time — unlike DvP, where hit rate went
+*down*. But a +1.9pp hit-rate gap on ~315 flagged rows is exactly the kind of number that
+looks like a win and is actually sampling noise, so I tested it rather than eyeballing it.
+A **paired bootstrap** (2,000 resamples; each iteration resamples validation rows *once*
+and scores both models on that same resample, respecting the fact that the two flagged
+sets overlap heavily) gives:
+
+> mean **+1.9pp**, 90% CI **[−0.8, +4.6]pp**, **87%** of resamples favor persistence.
+
+**The confidence interval crosses zero.** 87% is suggestive, not conclusive — a real
+effect would want ~95%. The four persistence features do carry non-trivial model
+importance (~10% combined), so the model is genuinely using them, but that's evidence
+they're informative, not evidence they improve out-of-sample accuracy.
+
+**Verdict: promising, not proven — not auto-promoted.** This is the same standard that
+rejected DvP, applied to a result that happens to lean the right way. Adopting it on 87%
+would be exactly the "one metric moved in the right direction by a trivial margin"
+reasoning this evaluation has rejected twice already. The honest read is that it's the
+most encouraging of the three experiments and is worth re-running once 2025 or 2026 data
+roughly doubles the validation sample — at which point the same test either clears 95% or
+it doesn't.
+
 ## Bottom line
 
 The model beats a naive rolling-average baseline by a real but modest margin (~10% MAE
@@ -303,11 +351,13 @@ improvement), and its flagged list — the actual decision-relevant output — h
 Run against a real league on real ESPN infrastructure, its top flags line up with
 specific, verifiable 2024 storylines rather than just looking reasonable in a table. The
 separate matchup simulator's win probabilities are honestly calibrated against 97 real
-outcomes, not just directionally plausible. Two follow-on accuracy experiments were tried
-and reported honestly regardless of outcome: opponent-adjusted projections didn't
+outcomes, not just directionally plausible. Three follow-on accuracy experiments were
+tried and reported honestly regardless of outcome: opponent-adjusted projections didn't
 measurably help and weren't adopted; a right-skewed, correlation-aware simulator held
 calibration steady on real, measured inputs and was adopted on that basis, not because the
-number moved dramatically. None of this is a large, dramatic edge. It's a legitimate,
+number moved dramatically; usage-persistence features leaned positive on both metrics but
+failed a paired bootstrap at the 90% level, so they were left un-promoted rather than
+adopted on a number that looked good. None of this is a large, dramatic edge. It's a legitimate,
 honestly-measured one, arrived at by building an evaluation harness rigorous enough to
 catch and correct my own modeling mistakes along the way — which is the actual point of
 the exercise.

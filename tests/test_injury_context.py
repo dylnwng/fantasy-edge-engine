@@ -115,3 +115,67 @@ def test_prefers_most_severe_status_among_multiple_ahead_teammates():
     assert ctx.has_injury_context is True
     assert ctx.teammate_name == "Jaylen Waddle"  # Out outranks Questionable
     assert ctx.teammate_status == "Out"
+
+
+def _blocker_reports(statuses_by_week):
+    return pd.DataFrame(
+        [_injury_row("STARTER", wk, "GB", "RB", "Star Starter", s) for wk, s in statuses_by_week.items()]
+    )
+
+
+def test_blocker_trajectory_improving_means_the_window_is_closing():
+    from edge_engine.model.injury_context import blocker_status_trajectory
+
+    injuries = _blocker_reports({2: "Out", 3: "Questionable"})
+    assert blocker_status_trajectory(injuries, "STARTER", 2023, 3, lookback=2) == "improving"
+
+
+def test_blocker_trajectory_worsening_means_the_window_is_staying_open():
+    from edge_engine.model.injury_context import blocker_status_trajectory
+
+    injuries = _blocker_reports({2: "Questionable", 3: "Out"})
+    assert blocker_status_trajectory(injuries, "STARTER", 2023, 3, lookback=2) == "worsening"
+
+
+def test_blocker_trajectory_stable_when_designation_unchanged():
+    from edge_engine.model.injury_context import blocker_status_trajectory
+
+    injuries = _blocker_reports({2: "Out", 3: "Out"})
+    assert blocker_status_trajectory(injuries, "STARTER", 2023, 3, lookback=2) == "stable"
+
+
+def test_blocker_trajectory_needs_two_reports_to_have_a_direction():
+    from edge_engine.model.injury_context import blocker_status_trajectory
+
+    injuries = _blocker_reports({3: "Out"})
+    assert blocker_status_trajectory(injuries, "STARTER", 2023, 3, lookback=2) is None
+
+
+def test_blocker_trajectory_does_not_infer_recovery_from_absence():
+    # load_injury_reports() only keeps rows carrying a game-status
+    # designation, so a week where the blocker simply doesn't appear
+    # might be a practice-only report rather than a clean bill of
+    # health. Absence must never be scored as "improving".
+    from edge_engine.model.injury_context import blocker_status_trajectory
+
+    injuries = _blocker_reports({2: "Out"})  # nothing at all in week 3
+    assert blocker_status_trajectory(injuries, "STARTER", 2023, 3, lookback=2) is None
+
+
+def test_trajectory_is_surfaced_in_the_explanation_and_field():
+    player_week = pd.DataFrame(
+        [
+            _pw_row("STARTER", 1, "GB", "RB", 0.80),
+            _pw_row("STARTER", 2, "GB", "RB", 0.80),
+            _pw_row("BACKUP", 1, "GB", "RB", 0.10),
+            _pw_row("BACKUP", 2, "GB", "RB", 0.10),
+            _pw_row("BACKUP", 3, "GB", "RB", 0.85),
+        ]
+    )
+    injuries = _blocker_reports({2: "Out", 3: "Questionable"})
+
+    context = get_injury_context(player_week, injuries, "BACKUP", 2023, 3)
+
+    assert context.has_injury_context
+    assert context.blocker_trajectory == "improving"
+    assert "window may be closing" in context.explanation.replace("opportunity ", "")

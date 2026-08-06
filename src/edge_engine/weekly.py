@@ -28,6 +28,8 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
+
 from edge_engine.ingestion.pipeline import ingest_seasons
 from edge_engine.ranking.roster_fit import main as run_roster_fit
 from edge_engine.roster.interface import RosterStateSource, get_default_source
@@ -79,6 +81,13 @@ def run_matchup_simulator_if_live(source: RosterStateSource) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--all", action="store_true",
+        help="show every ranked free agent (default: High/Medium-confidence tiers only)",
+    )
+    args = parser.parse_args()
+
     source = get_default_source()
     try:
         season = source.get_league_config().season
@@ -87,7 +96,11 @@ def main() -> None:
         print()
 
         print("=== Free-agent rankings (roster-fit) ===")
-        run_roster_fit()
+        # Explicit argv, never the default sys.argv fallthrough: this is
+        # a direct in-process call, so roster_fit's own parser would
+        # otherwise try to parse *weekly.py's* command line and reject
+        # any flag it doesn't recognize.
+        run_roster_fit(["--all"] if args.all else [])
 
         print()
         print("=== Matchup simulator ===")
