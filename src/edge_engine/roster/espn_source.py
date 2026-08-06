@@ -28,11 +28,11 @@ Known limitations, stated up front rather than silently assumed away:
   - min_bid and waiver clear_day aren't exposed by ESPN's API at all;
     reasonable ESPN-standard defaults ($1, Wednesday) are used, called
     out explicitly rather than presented as pulled from the league.
-  - This module has not been exercised against a real live league in
-    this session -- there were no credentials available to test with.
-    The mapping logic is unit-tested against synthetic espn_api-shaped
-    objects (tests/test_espn_source.py), but a first real run should be
-    treated as the actual integration test.
+  - Exercised against the real live league (get_roster_meta() returned
+    a real result). The mapping logic is also unit-tested against
+    synthetic espn_api-shaped objects (tests/test_espn_source.py). Not
+    yet exercised end-to-end against an in-season live matchup, though
+    -- the 2026 season hadn't started as of that check.
 """
 
 from __future__ import annotations
@@ -158,10 +158,33 @@ class EspnRosterStateSource:
     def _get_league(self):
         if self._league is None:
             from espn_api.football import League
+            from espn_api.requests.espn_requests import ESPNAccessDenied, ESPNInvalidLeague, ESPNUnknownError
 
-            self._league = League(
-                league_id=self.league_id, year=self.year, espn_s2=self._espn_s2, swid=self._swid
-            )
+            # League(...) makes its first authenticated request immediately
+            # (fetch_league() runs inside __init__) -- this is the one place
+            # an expired/invalid ESPN_S2/ESPN_SWID cookie actually surfaces,
+            # so it's the one place worth translating into a message that
+            # says what to do next instead of a raw espn_api traceback.
+            try:
+                self._league = League(
+                    league_id=self.league_id, year=self.year, espn_s2=self._espn_s2, swid=self._swid
+                )
+            except ESPNAccessDenied as e:
+                raise RuntimeError(
+                    "ESPN rejected the ESPN_S2/ESPN_SWID cookies in .env (access denied). These "
+                    "expire periodically -- pull fresh values from your browser's dev tools the "
+                    "same way .env.example describes, and update .env."
+                ) from e
+            except ESPNInvalidLeague as e:
+                raise RuntimeError(
+                    f"ESPN says league {self.league_id} (year {self.year}) doesn't exist. Check "
+                    "ESPN_LEAGUE_ID and ESPN_YEAR in .env against the league's URL on the ESPN site."
+                ) from e
+            except ESPNUnknownError as e:
+                raise RuntimeError(
+                    f"ESPN's API returned an unexpected error: {e}. This usually clears up on retry "
+                    "(transient ESPN-side issue) -- if it keeps happening, double-check .env."
+                ) from e
         return self._league
 
     def _get_lookup(self) -> PlayerLookup:

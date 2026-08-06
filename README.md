@@ -66,14 +66,18 @@ concept of one — there's no payoff to hand-maintaining an opponent's roster ev
 
 ## Quickstart
 
+One-time setup:
+
 ```bash
 python3 -m venv .venv && source .venv/bin/activate  # Python 3.11+
 bash scripts/install.sh          # nfl_data_py needs a two-step install, see the script
 python -m edge_engine.ingestion.pipeline --seasons 2018 2019 2020 2021 2022 2023 2024
 python -m edge_engine.model.train
-python -m edge_engine.ranking.roster_fit     # CLI table
-streamlit run app.py                          # interactive dashboard
 ```
+
+`train` fits a static model artifact — it doesn't need to be re-run weekly. Only
+re-run it if you intentionally want to retrain (e.g. once a lot more of a season's
+data exists), not as part of your regular routine below.
 
 By default, roster/free-agent data comes from the example files in `data/roster_state/`.
 To point it at a real ESPN league instead:
@@ -83,10 +87,25 @@ cp .env.example .env   # fill in your league ID, team ID, and auth cookies — s
                         # file's comments for exactly how to find each one
 ```
 
-With `EDGE_ENGINE_ROSTER_SOURCE=espn` set, the matchup simulator becomes available too:
+Every week:
 
 ```bash
-python -m edge_engine.simulation.matchup_cli            # this week's actual matchup
+python -m edge_engine.weekly     # refreshes this season's data, prints rankings +
+                                  # your live matchup (if EDGE_ENGINE_ROSTER_SOURCE=espn)
+streamlit run app.py             # interactive dashboard, same data
+```
+
+`weekly` exists because re-running `ingestion.pipeline` without `--force-refresh`
+silently serves whatever's already cached — it never hits the network again, with no
+warning that it didn't. `weekly` force-refreshes only the current season (historical
+training seasons don't change, so it never re-pulls those) and turns an expired ESPN
+session or a not-yet-published nflverse season into a clear message instead of a raw
+traceback. The individual pieces are still available directly if you want just one of
+them:
+
+```bash
+python -m edge_engine.ranking.roster_fit                # free-agent rankings only
+python -m edge_engine.simulation.matchup_cli             # this week's actual matchup
 python -m edge_engine.simulation.matchup_cli --week 15   # or any past week, e.g. for a post-mortem
 ```
 
@@ -101,6 +120,8 @@ src/edge_engine/
                  plus the ESPN-only matchup/opponent-data protocol
   ranking/       free-agent ranking, usage-trend explanations, roster-fit re-ranking
   simulation/    Monte Carlo matchup simulation + brute-force FLEX optimizer (ESPN-only)
+  weekly.py      single weekly entry point — refresh current-season data, run rankings
+                 and (if live) the matchup simulator, with clear errors instead of tracebacks
 app.py           Streamlit dashboard
 theme.py         its visual design system (dark, DIN Condensed, film-room terminal)
 model_config.yaml        opportunity model settings (seasons, thresholds)
@@ -128,4 +149,4 @@ scope boundary rather than an oversight.
 pytest
 ```
 
-73 tests, no live network calls or credentials required.
+101 tests, no live network calls or credentials required.

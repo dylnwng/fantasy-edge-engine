@@ -1,6 +1,7 @@
 import pytest
 
 from edge_engine.roster.espn_source import (
+    EspnRosterStateSource,
     _bonuses_from_scoring_format,
     _map_lineup_slots,
     _normalize_team,
@@ -91,5 +92,47 @@ def test_map_lineup_slots_sums_multiple_flex_style_slots():
 
 def test_normalize_team_maps_known_espn_alias():
     assert _normalize_team("WSH") == "WAS"
+
+
+def _espn_source():
+    return EspnRosterStateSource(
+        league_id=1, year=2024, team_id=1, espn_s2="fake", swid="fake"
+    )
+
+
+def test_get_league_translates_access_denied_into_actionable_message(monkeypatch):
+    from espn_api.requests.espn_requests import ESPNAccessDenied
+
+    def _raise_access_denied(**kwargs):
+        raise ESPNAccessDenied("League 1 cannot be accessed with the provided credentials")
+
+    monkeypatch.setattr("espn_api.football.League", _raise_access_denied)
+
+    with pytest.raises(RuntimeError, match="ESPN_S2/ESPN_SWID"):
+        _espn_source()._get_league()
+
+
+def test_get_league_translates_invalid_league_into_actionable_message(monkeypatch):
+    from espn_api.requests.espn_requests import ESPNInvalidLeague
+
+    def _raise_invalid_league(**kwargs):
+        raise ESPNInvalidLeague("League 1 does not exist")
+
+    monkeypatch.setattr("espn_api.football.League", _raise_invalid_league)
+
+    with pytest.raises(RuntimeError, match="ESPN_LEAGUE_ID"):
+        _espn_source()._get_league()
+
+
+def test_get_league_translates_unknown_error_into_actionable_message(monkeypatch):
+    from espn_api.requests.espn_requests import ESPNUnknownError
+
+    def _raise_unknown_error(**kwargs):
+        raise ESPNUnknownError("ESPN returned an HTTP 500")
+
+    monkeypatch.setattr("espn_api.football.League", _raise_unknown_error)
+
+    with pytest.raises(RuntimeError, match="unexpected error"):
+        _espn_source()._get_league()
     assert _normalize_team("LAR") == "LAR"  # already nflverse-recognized, untouched
     assert _normalize_team("KC") == "KC"
