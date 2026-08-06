@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 
 from edge_engine.model.features import build_features
-from edge_engine.model.scoring import compute_fantasy_points
+from edge_engine.model.scoring import compute_fantasy_points, compute_points_for_seasons
 from edge_engine.roster.models import ScoringSettings
 
 
@@ -135,3 +135,13 @@ def test_duplicate_player_week_key_raises_instead_of_corrupting():
 
     with pytest.raises(ValueError, match="duplicate"):
         build_features(player_week, points, window=2)
+
+
+def test_compute_points_for_seasons_empty_list_returns_empty_not_a_crash():
+    # pd.concat([]) raises "No objects to concatenate" -- an empty
+    # seasons list has an obvious correct answer (no points), and is a
+    # real, reachable case: history.py's track_flagged_players() is a
+    # public function callable with an empty seasons list directly.
+    result = compute_points_for_seasons([], ScoringSettings(ppr_type="full_ppr"))
+    assert list(result.columns) == ["season", "week", "player_id", "points"]
+    assert len(result) == 0

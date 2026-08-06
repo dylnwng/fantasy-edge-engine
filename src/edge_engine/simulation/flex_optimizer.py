@@ -36,7 +36,13 @@ def enumerate_flex_candidates(my_lineup: list[MatchupPlayer], lineup_slots: dict
     fill the league's FLEX slot(s), holding every other starter fixed.
     If the league has no FLEX slot, returns just the current starters."""
     non_flex_starters = [mp for mp in my_lineup if mp.player.slot_position not in _NON_STARTER_SLOTS]
-    n_flex = lineup_slots.get("FLEX", 0)
+    # Clamped at 0: a malformed lineup_slots value (the same class of bug
+    # fixed in roster_fit.py's position_need) would otherwise reach
+    # itertools.combinations(flex_pool, n_flex) below with a negative r,
+    # which raises its own unhelpful "ValueError: r must be non-negative"
+    # -- a slot count can never be genuinely negative, so treating it the
+    # same as "no FLEX slot" is the correct floor, not a guess.
+    n_flex = max(0, lineup_slots.get("FLEX", 0))
     if n_flex == 0:
         return [non_flex_starters]
 

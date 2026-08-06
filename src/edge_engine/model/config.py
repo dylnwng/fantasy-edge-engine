@@ -39,12 +39,39 @@ def load_model_config(path: Path | None = None) -> ModelConfig:
         raw = yaml.safe_load(f)
 
     flag_margin = raw.get("flag_margin", 3.0)
+    # A second QA pass found the range check below crashes with a raw,
+    # confusing TypeError if flag_margin is accidentally quoted as a
+    # string in the YAML (e.g. `flag_margin: "3.0"`) -- catch the wrong
+    # type explicitly first, same fix as simulation/config.py's
+    # _require_number.
+    if isinstance(flag_margin, bool) or not isinstance(flag_margin, (int, float)):
+        raise ValueError(
+            f"model_config.yaml: flag_margin must be a number, got {flag_margin!r} "
+            f"({type(flag_margin).__name__}) -- check for accidental quotes in the YAML."
+        )
     if flag_margin < 0:
         raise ValueError(f"model_config.yaml: flag_margin must be >= 0, got {flag_margin}")
 
+    train_seasons = raw["train_seasons"]
+    validation_season = raw["validation_season"]
+    if validation_season in train_seasons:
+        # The PRD's whole reason for a held-out SEASON split (not
+        # held-out weeks within a season) is to avoid leakage -- a
+        # validation_season that's also in train_seasons doesn't crash
+        # anything downstream (train.py's train_and_evaluate happily
+        # splits on both), it just silently validates the model on data
+        # it was trained on, producing an artificially low MAE and
+        # invalidating every accuracy number in EVALUATION.md with no
+        # warning. A second QA pass found this had no guard at all.
+        raise ValueError(
+            f"model_config.yaml: validation_season={validation_season} is also in "
+            f"train_seasons={train_seasons} -- this defeats the whole point of a "
+            "held-out split (the model would be validated on data it trained on)."
+        )
+
     return ModelConfig(
-        train_seasons=raw["train_seasons"],
-        validation_season=raw["validation_season"],
+        train_seasons=train_seasons,
+        validation_season=validation_season,
         trailing_window=raw.get("trailing_window", 2),
         flag_margin=flag_margin,
         injury_ahead_usage_gap=raw.get("injury_ahead_usage_gap", 0.15),

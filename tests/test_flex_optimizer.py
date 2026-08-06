@@ -53,6 +53,16 @@ def test_enumerate_flex_candidates_zero_flex_slots_returns_current_only():
     assert len(candidates) == 1
 
 
+def test_enumerate_flex_candidates_negative_flex_count_is_clamped_not_a_crash():
+    # A malformed lineup_slots value (e.g. a stray "-" typo) used to
+    # reach itertools.combinations(flex_pool, -1), which raises its own
+    # unhelpful "r must be non-negative" -- must be treated the same as
+    # "no FLEX slot" instead.
+    lineup = _basic_lineup()
+    candidates = enumerate_flex_candidates(lineup, {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": -1})
+    assert len(candidates) == 1
+
+
 def test_enumerate_flex_candidates_two_flex_slots_gives_correct_combination_count():
     lineup = _basic_lineup() + [_mp("BenchExtra", "RB", "BE")]
     # flex_pool now has 4 players (FlexNow, BenchStud, BenchWeak, BenchExtra), choose 2 -> C(4,2)=6

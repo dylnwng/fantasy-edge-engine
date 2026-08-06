@@ -79,6 +79,13 @@ def compute_points_for_seasons(seasons: list[int], scoring: ScoringSettings) -> 
     from nflverse's raw weekly_data (which has the raw stat columns
     compute_fantasy_points needs) — not from the usage table, which
     intentionally doesn't carry them. Returns (season, week, player_id, points)."""
+    if not seasons:
+        # pd.concat([]) raises "No objects to concatenate" -- an empty
+        # `seasons` list has an obvious, correct answer (no seasons
+        # requested, no points), same as every other empty-input path in
+        # this codebase, not something that should crash a caller like
+        # history.py's track_flagged_players().
+        return pd.DataFrame(columns=["season", "week", "player_id", "points"])
     frames = []
     for season in seasons:
         weekly = fetch_weekly_data(season)

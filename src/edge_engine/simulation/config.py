@@ -12,6 +12,24 @@ DEFAULT_SIMULATION_CONFIG_PATH = ROOT_DIR / "simulation_config.yaml"
 _VALID_DISTRIBUTIONS = {"normal", "gamma"}
 
 
+def _require_number(field: str, value):
+    """A second QA pass found that the range checks below crash with a
+    raw, confusing TypeError ('<=' not supported between instances of
+    ...) if a YAML value is accidentally quoted as a string (e.g.
+    `n_sims: "10000"` -- an easy mistake, and YAML's own bool/int
+    overlap means `bool` sneaking in here is also worth ruling out
+    explicitly, since `True <= 1.0` would otherwise silently pass as 1).
+    Catching the wrong type here keeps every config validation failure
+    equally clear, not just the ones that happen to be the right type
+    but out of range."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(
+            f"simulation_config.yaml: {field} must be a number, got {value!r} "
+            f"({type(value).__name__}) -- check for accidental quotes in the YAML."
+        )
+    return value
+
+
 @dataclass(frozen=True)
 class SimulationConfig:
     n_sims: int
@@ -57,7 +75,7 @@ def load_simulation_config(path: Path | None = None) -> SimulationConfig:
     with open(path) as f:
         raw = yaml.safe_load(f)
 
-    n_sims = raw.get("n_sims", 10_000)
+    n_sims = _require_number("n_sims", raw.get("n_sims", 10_000))
     if n_sims <= 0:
         raise ValueError(f"simulation_config.yaml: n_sims must be positive, got {n_sims}")
 
@@ -69,7 +87,7 @@ def load_simulation_config(path: Path | None = None) -> SimulationConfig:
             "otherwise silently fall back to 'normal' with no warning."
         )
 
-    team_correlation = raw.get("team_correlation", 0.0)
+    team_correlation = _require_number("team_correlation", raw.get("team_correlation", 0.0))
     if not (0.0 <= team_correlation <= 1.0):
         raise ValueError(
             f"simulation_config.yaml: team_correlation must be between 0.0 and 1.0, "
