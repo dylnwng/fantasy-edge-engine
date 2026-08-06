@@ -44,6 +44,17 @@ def enumerate_flex_candidates(my_lineup: list[MatchupPlayer], lineup_slots: dict
         mp for mp in my_lineup
         if mp.player.slot_position in ("FLEX", "BE") and mp.player.position in FLEX_ELIGIBLE_POSITIONS
     ]
+    if len(flex_pool) < n_flex:
+        # itertools.combinations(flex_pool, n_flex) silently yields nothing
+        # when the pool is smaller than n_flex, which left find_best_flex_
+        # lineup() with an empty `scored` list and crashed on scored[0]
+        # with a bare IndexError -- confirmed with a 2-FLEX league and a
+        # thin bench (only 1 eligible player). Fail with a message that
+        # actually explains what's short, instead.
+        raise ValueError(
+            f"Can't fill {n_flex} FLEX slot(s): only {len(flex_pool)} FLEX-eligible "
+            f"bench player(s) available ({FLEX_ELIGIBLE_POSITIONS})."
+        )
     return [non_flex_starters + list(combo) for combo in itertools.combinations(flex_pool, n_flex)]
 
 

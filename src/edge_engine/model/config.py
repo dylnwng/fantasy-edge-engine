@@ -26,14 +26,27 @@ class ModelConfig:
 
 
 def load_model_config(path: Path | None = None) -> ModelConfig:
+    """flag_margin must be >= 0: ranking.output.confidence_tier() computes
+    `margin >= 2*flag_margin` / `margin >= flag_margin` to assign High/
+    Medium/Low -- a negative flag_margin flips those comparisons around,
+    so a player predicted to score *below* their own baseline would
+    silently qualify as "High confidence, worth a real FAAB bid" (a QA
+    pass confirmed this concretely: confidence_tier(5.0, 10.0, -3.0)
+    returns "High"). Caught here, not in confidence_tier itself, since
+    this is the one place a hand-edited YAML value enters the system."""
     path = path or DEFAULT_MODEL_CONFIG_PATH
     with open(path) as f:
         raw = yaml.safe_load(f)
+
+    flag_margin = raw.get("flag_margin", 3.0)
+    if flag_margin < 0:
+        raise ValueError(f"model_config.yaml: flag_margin must be >= 0, got {flag_margin}")
+
     return ModelConfig(
         train_seasons=raw["train_seasons"],
         validation_season=raw["validation_season"],
         trailing_window=raw.get("trailing_window", 2),
-        flag_margin=raw.get("flag_margin", 3.0),
+        flag_margin=flag_margin,
         injury_ahead_usage_gap=raw.get("injury_ahead_usage_gap", 0.15),
         injury_lookback_weeks=raw.get("injury_lookback_weeks", 2),
     )

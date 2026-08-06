@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 import yaml
 
 from edge_engine.roster import manual_source
@@ -87,6 +88,80 @@ def test_unmatched_player_is_surfaced_not_dropped(tmp_path, monkeypatch):
     assert free_agents[0].match_status == "unmatched"
     assert free_agents[0].player_id is None
     assert "Typo Playerr" in free_agents[0].match_note
+
+
+def test_missing_csv_file_raises_clear_message(tmp_path, monkeypatch):
+    # A first-time user who hasn't created free_agents.csv yet used to
+    # get a bare FileNotFoundError with a raw temp-style path. Must point
+    # at the documented format instead.
+    _write_league_config(tmp_path)
+    _write_roster_meta(tmp_path)
+    (tmp_path / "my_roster.csv").write_text("name,position,team\n")
+    # free_agents.csv deliberately not created
+
+    monkeypatch.setattr(manual_source.PlayerLookup, "build", classmethod(lambda cls: _StubLookup({})))
+
+    source = ManualRosterStateSource(base_dir=tmp_path)
+    with pytest.raises(RuntimeError, match="README"):
+        source.get_free_agents()
+
+
+def test_csv_missing_required_column_raises_clear_message(tmp_path, monkeypatch):
+    _write_league_config(tmp_path)
+    _write_roster_meta(tmp_path)
+    (tmp_path / "my_roster.csv").write_text("name,position,team\n")
+    (tmp_path / "free_agents.csv").write_text("name,team\nBob Smith,KC\n")  # no "position" column
+
+    monkeypatch.setattr(manual_source.PlayerLookup, "build", classmethod(lambda cls: _StubLookup({})))
+
+    source = ManualRosterStateSource(base_dir=tmp_path)
+    with pytest.raises(RuntimeError, match="position"):
+        source.get_free_agents()
+
+
+def test_empty_league_config_yaml_raises_clear_message(tmp_path):
+    (tmp_path / "league_config.yaml").write_text("")
+    _write_roster_meta(tmp_path)
+
+    source = ManualRosterStateSource(base_dir=tmp_path)
+    with pytest.raises(RuntimeError, match="empty"):
+        source.get_league_config()
+
+
+def test_league_config_missing_key_raises_clear_message(tmp_path):
+    (tmp_path / "league_config.yaml").write_text(yaml.dump({"season": 2026}))  # no scoring/lineup_slots/waivers
+    _write_roster_meta(tmp_path)
+
+    source = ManualRosterStateSource(base_dir=tmp_path)
+    with pytest.raises(RuntimeError, match="scoring"):
+        source.get_league_config()
+
+
+def test_league_config_unexpected_waiver_field_raises_clear_message(tmp_path):
+    config = {
+        "season": 2026,
+        "scoring": {"ppr_type": "full_ppr"},
+        "lineup_slots": {"QB": 1},
+        "waivers": {
+            "system": "FAAB", "season_budget": 100, "min_bid": 1,
+            "clear_day": "Wednesday", "extra_field": "oops",
+        },
+    }
+    (tmp_path / "league_config.yaml").write_text(yaml.dump(config))
+    _write_roster_meta(tmp_path)
+
+    source = ManualRosterStateSource(base_dir=tmp_path)
+    with pytest.raises(RuntimeError, match="extra_field"):
+        source.get_league_config()
+
+
+def test_missing_roster_meta_file_raises_clear_message(tmp_path):
+    _write_league_config(tmp_path)
+    # roster_meta.yaml deliberately not created
+
+    source = ManualRosterStateSource(base_dir=tmp_path)
+    with pytest.raises(RuntimeError, match="README"):
+        source.get_roster_meta()
 
 
 def test_player_lookup_disambiguates_by_team():

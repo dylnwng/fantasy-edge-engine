@@ -43,6 +43,23 @@ def build_features(player_week: pd.DataFrame, points: pd.Series, window: int = 2
     df["points"] = points.to_numpy()
     df = df.sort_values(["player_id", "season", "week"]).reset_index(drop=True)
 
+    # A duplicate (player_id, season, week) row -- e.g. an upstream join
+    # fan-out -- gets silently treated as a second real game by the
+    # rolling-window logic below: it fabricates a trailing average from
+    # the duplicate, and label_next_week_points ends up pointing at the
+    # duplicate itself rather than the real next game. A QA pass
+    # confirmed this concretely corrupts training data with no error.
+    # Fail loudly here instead, at the one place every caller passes
+    # through.
+    dupes = df.duplicated(subset=["player_id", "season", "week"], keep=False)
+    if dupes.any():
+        sample = df.loc[dupes, ["player_id", "season", "week"]].drop_duplicates().head(5)
+        raise ValueError(
+            f"player_week has {int(dupes.sum())} row(s) sharing a duplicate "
+            "(player_id, season, week) key -- build_features requires this to be "
+            f"unique. Example duplicated keys:\n{sample.to_string(index=False)}"
+        )
+
     grouped = df.groupby(["player_id", "season"], group_keys=False)
 
     for col in USAGE_COLUMNS:

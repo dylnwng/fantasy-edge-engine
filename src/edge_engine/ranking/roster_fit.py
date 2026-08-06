@@ -45,12 +45,21 @@ class RosterFitCandidate:
 def position_need(lineup_slots: dict[str, int], position: str) -> float:
     """Starters needed at `position`, including a proportional share of
     FLEX for FLEX-eligible positions -- e.g. 1 FLEX split 3 ways among
-    RB/WR/TE contributes ~0.33 of a starter each, not a whole one."""
+    RB/WR/TE contributes ~0.33 of a starter each, not a whole one.
+
+    Clamped at 0: a malformed lineup_slots value (e.g. a stray "-" typo
+    in a hand-edited league_config.yaml) would otherwise produce a
+    negative `need`, which scarcity_multiplier() below turns into a
+    negative multiplier -- silently flipping the sign of every
+    candidate's roster_fit_score at that position and inverting the
+    ranking with no error. A slot count can never be genuinely negative,
+    so 0 (this position needs nothing) is the correct floor, not a
+    guess."""
     need = lineup_slots.get(position, 0)
     flex = lineup_slots.get("FLEX", 0)
     if position in FLEX_ELIGIBLE_POSITIONS and flex:
         need += flex / len(FLEX_ELIGIBLE_POSITIONS)
-    return need
+    return max(0.0, need)
 
 
 def scarcity_multiplier(lineup_slots: dict[str, int], rostered: list[Player], position: str) -> tuple[float, float, int]:

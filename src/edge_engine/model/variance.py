@@ -35,6 +35,22 @@ def compute_trailing_points_std(
     NaN below `min_games` -- never silently backfilled with 0 or a
     league average; callers decide their own fallback."""
     df = points_table.sort_values(["player_id", "season", "week"]).reset_index(drop=True)
+
+    # Same duplicate-key vulnerability as features.py's build_features,
+    # confirmed by a QA pass to be even more severe here: a single
+    # duplicated row produced a fabricated trailing_points_std of 699.3
+    # in testing (std of [10, 999] from a duplicate plus one real value),
+    # which would silently corrupt the Monte Carlo simulator's per-player
+    # variance input. Fail loudly instead.
+    dupes = df.duplicated(subset=["player_id", "season", "week"], keep=False)
+    if dupes.any():
+        sample = df.loc[dupes, ["player_id", "season", "week"]].drop_duplicates().head(5)
+        raise ValueError(
+            f"points_table has {int(dupes.sum())} row(s) sharing a duplicate "
+            "(player_id, season, week) key -- compute_trailing_points_std requires "
+            f"this to be unique. Example duplicated keys:\n{sample.to_string(index=False)}"
+        )
+
     grouped = df.groupby(["player_id", "season"], group_keys=False)["points"]
     df["trailing_points_std"] = grouped.transform(
         lambda s: s.rolling(window, min_periods=min_games).std(ddof=1)

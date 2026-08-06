@@ -44,3 +44,24 @@ def test_upsert_appends_new_weeks(tmp_path):
 
     assert len(result) == 2
     assert set(result["week"]) == {1, 2}
+
+
+def test_upsert_dedupes_duplicate_keys_within_a_single_batch(tmp_path):
+    # Two rows sharing the same (season, week, player_id) key in ONE call
+    # -- e.g. an upstream join fan-out -- used to both get written,
+    # violating this module's own "replaces, not duplicates" contract.
+    path = tmp_path / "player_week.parquet"
+
+    batch = pd.DataFrame(
+        {
+            "season": [2023, 2023],
+            "week": [1, 1],
+            "player_id": ["A", "A"],
+            "fantasy_points_ppr": [10.0, 20.0],
+        }
+    )
+    result = upsert(batch, path)
+
+    assert len(result) == 1
+    # keep="last": the later row in the batch wins.
+    assert result.iloc[0]["fantasy_points_ppr"] == 20.0

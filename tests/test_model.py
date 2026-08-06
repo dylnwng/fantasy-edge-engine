@@ -117,3 +117,21 @@ def test_label_is_next_games_points_within_same_player_season():
     assert by_week.loc[2, "label_next_week_points"] == 20.0
     # Last game of the season has no "next week" to label.
     assert pd.isna(by_week.loc[3, "label_next_week_points"])
+
+
+def test_duplicate_player_week_key_raises_instead_of_corrupting():
+    # A duplicate (player_id, season, week) row would otherwise be
+    # silently treated as a second real game by the rolling-window
+    # logic -- fabricating a trailing average from the duplicate, and
+    # pointing label_next_week_points at the duplicate itself rather
+    # than the real next game. Must fail loudly instead.
+    rows = [
+        _player_week_row("P1", 2023, 1, snap_pct=0.1),
+        _player_week_row("P1", 2023, 1, snap_pct=0.1),  # exact duplicate key
+        _player_week_row("P1", 2023, 2, snap_pct=0.9),
+    ]
+    player_week = pd.DataFrame(rows)
+    points = pd.Series([5.0, 5.0, 30.0])
+
+    with pytest.raises(ValueError, match="duplicate"):
+        build_features(player_week, points, window=2)

@@ -37,7 +37,25 @@ def main() -> None:
 
     sim_config = load_simulation_config()
     source = get_matchup_source()
-    snapshot = source.get_current_matchup(week=args.week)
+    try:
+        snapshot = source.get_current_matchup(week=args.week)
+    except Exception as e:
+        # get_current_matchup() raises a clean ValueError for the case it
+        # recognizes (e.g. a bye week in an odd-team league), but a QA
+        # pass confirmed espn_api's own box_scores() can also raise a raw
+        # KeyError deep inside its own parsing when asked about a week
+        # with no real matchup data yet (e.g. before the season starts) --
+        # not something worth enumerating every possible library-internal
+        # exception for. Raised as a plain RuntimeError, not SystemExit:
+        # weekly.py imports and calls main() directly and needs to catch
+        # this with a normal `except Exception` to skip just this step --
+        # SystemExit inherits from BaseException, not Exception, and
+        # would otherwise escape that catch and kill the whole weekly
+        # run instead of just skipping the matchup section (a real
+        # regression caught by re-running weekly.py end to end after
+        # this fix). The __main__ block below is the only place this
+        # becomes a clean process exit, for direct CLI invocation.
+        raise RuntimeError(f"Could not load the matchup for this week: {e}") from e
 
     print(f"Week {snapshot.week}: {snapshot.my_team_name} vs {snapshot.opponent_team_name}")
     print()
@@ -84,4 +102,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        # Only converted to a clean process exit here, at the direct-CLI
+        # boundary -- main() itself raises plain exceptions so weekly.py
+        # (which imports and calls main() directly) can catch and skip
+        # just this step instead of the whole run dying.
+        raise SystemExit(str(e)) from e

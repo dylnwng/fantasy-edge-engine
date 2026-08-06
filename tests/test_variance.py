@@ -58,3 +58,20 @@ def test_std_only_counts_played_games_not_calendar_weeks():
     out = compute_trailing_points_std(df, window=6, min_games=3)
     row = out[(out["season"] == 2023) & (out["week"] == 4)].iloc[0]
     assert row["trailing_points_std"] == pytest.approx(0.0)  # 3 identical values -> std 0, not NaN
+
+
+def test_duplicate_player_week_key_raises_instead_of_corrupting():
+    # A duplicate (player_id, season, week) row -- e.g. an upstream join
+    # fan-out -- would otherwise be silently treated as a second real
+    # game, fabricating a trailing std from data that isn't a real
+    # second observation. Confirmed directly: this produced a std of
+    # 699.3 in testing. Must fail loudly instead.
+    df = pd.DataFrame(
+        [
+            _row("P1", 2023, 1, 10.0),
+            _row("P1", 2023, 1, 10.0),  # exact duplicate key
+            _row("P1", 2023, 2, 999.0),
+        ]
+    )
+    with pytest.raises(ValueError, match="duplicate"):
+        compute_trailing_points_std(df, window=2, min_games=2)

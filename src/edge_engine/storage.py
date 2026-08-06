@@ -18,6 +18,15 @@ KEY_COLUMNS = ["season", "week", "player_id"]
 def upsert(df: pd.DataFrame, path: Path, key_columns: list[str] = KEY_COLUMNS) -> pd.DataFrame:
     path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Two rows sharing the same key *within* a single incoming batch (an
+    # upstream join fan-out, say) used to both get written -- this
+    # module's own docstring promises "replaces... rather than
+    # duplicating them," but that was only ever enforced against the
+    # existing file, never within one call's own data. keep="last": the
+    # later row in the batch wins, same "new data is authoritative"
+    # direction as the existing-vs-new replacement below.
+    df = df.drop_duplicates(subset=key_columns, keep="last")
+
     if path.exists():
         existing = pd.read_parquet(path)
         new_keys = df[key_columns].drop_duplicates()

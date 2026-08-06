@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from edge_engine.roster.matchup import MatchupPlayer
 from edge_engine.roster.models import Player
@@ -57,6 +58,40 @@ def test_enumerate_flex_candidates_two_flex_slots_gives_correct_combination_coun
     # flex_pool now has 4 players (FlexNow, BenchStud, BenchWeak, BenchExtra), choose 2 -> C(4,2)=6
     candidates = enumerate_flex_candidates(lineup, {**LINEUP_SLOTS_ONE_FLEX, "FLEX": 2})
     assert len(candidates) == 6
+
+
+def test_enumerate_flex_candidates_raises_clear_error_when_pool_too_small():
+    # A 2-FLEX league with a thin bench (only 1 FLEX-eligible player) used
+    # to leave find_best_flex_lineup() with an empty candidate list, which
+    # crashed on scored[0] with a bare IndexError. Must fail clearly here
+    # instead, before that ever happens.
+    lineup = [
+        _mp("QB1", "QB", "QB"),
+        _mp("RB1", "RB", "RB"),
+        _mp("WR1", "WR", "WR"),
+        _mp("BenchRB", "RB", "BE"),  # only 1 FLEX-eligible bench player
+        _mp("BenchK", "K", "BE"),  # not FLEX-eligible
+    ]
+    with pytest.raises(ValueError, match="2 FLEX slot"):
+        enumerate_flex_candidates(lineup, {"QB": 1, "RB": 1, "WR": 1, "FLEX": 2})
+
+
+def test_find_best_flex_lineup_raises_clear_error_when_pool_too_small():
+    lineup = [
+        _mp("QB1", "QB", "QB"),
+        _mp("RB1", "RB", "RB"),
+        _mp("WR1", "WR", "WR"),
+        _mp("BenchRB", "RB", "BE"),
+        _mp("BenchK", "K", "BE"),
+    ]
+    opp_proj = [_proj(_mp("Opp1", "RB", "RB"), 12.0, 3.0)]
+
+    with pytest.raises(ValueError, match="2 FLEX slot"):
+        find_best_flex_lineup(
+            lineup, opp_proj, lambda mp: _proj(mp, 10.0, 3.0),
+            {"QB": 1, "RB": 1, "WR": 1, "FLEX": 2},
+            n_sims=100, rng=np.random.default_rng(0),
+        )
 
 
 def test_find_best_flex_lineup_picks_the_analytically_obvious_swap():

@@ -94,3 +94,16 @@ def test_pre_rerank_score_stays_visible_as_a_distinct_field():
     # roster-fit score, not overwritten or lost in the re-ranking step.
     assert result.candidate.predicted_score == 20.0
     assert result.roster_fit_score != result.candidate.predicted_score
+
+
+def test_negative_lineup_slots_does_not_invert_the_ranking():
+    # A malformed league_config.yaml (e.g. a stray "-" typo) used to
+    # produce a negative scarcity multiplier, silently flipping the sign
+    # of roster_fit_score and inverting the ranking with no error.
+    bad_config = _league_config(lineup_slots={"RB": -5})
+    candidate = _candidate("cand_rb", "Candidate RB", "RB", "AAA", predicted_score=20.0)
+
+    result = apply_roster_fit([candidate], bad_config, rostered=[], bye_weeks_by_player_id={})[0]
+
+    assert result.scarcity_multiplier >= 0.0
+    assert result.roster_fit_score >= 0.0
