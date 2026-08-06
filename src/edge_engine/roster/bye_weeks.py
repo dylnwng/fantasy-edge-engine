@@ -4,14 +4,22 @@ entered manually — they're public and don't change once released.
 
 from __future__ import annotations
 
-from functools import lru_cache
-
 from edge_engine.roster import nflverse_ref
 
 
-@lru_cache(maxsize=None)
 def get_bye_weeks(season: int, force_refresh: bool = False) -> dict[str, int]:
-    """team_abbr -> bye week number, for one season."""
+    """team_abbr -> bye week number, for one season.
+
+    Deliberately not @lru_cache'd (an earlier version was): the schedule
+    fetch below already caches at the file level via nflverse_ref's
+    cached_fetch, so an in-memory cache here bought nothing but a real
+    staleness risk -- a long-running process (the Streamlit dashboard)
+    would keep serving a schedule correction or a since-force_refresh'd
+    update from before its first call in that process's life,
+    indefinitely. Every call site here invokes this once per method call
+    (not per player), so recomputing this small groupby each time is
+    trivial -- there was no real performance case for the in-memory
+    cache to begin with."""
     sched = nflverse_ref.fetch_schedules(season, force_refresh)
     reg = sched[sched["game_type"] == "REG"]
 
