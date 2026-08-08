@@ -110,6 +110,8 @@ traceback. The individual pieces are still available directly if you want just o
 them:
 
 ```bash
+python -m edge_engine.insights                          # what's wrong with my roster (Phase 3)
+python -m edge_engine.insights --week 12 --all          # a past week, neutral players listed
 python -m edge_engine.ranking.roster_fit                # free-agent rankings only
 python -m edge_engine.ranking.roster_fit --top 20        # top 20 regardless of tier
 python -m edge_engine.ranking.roster_fit --all           # every candidate, no truncation
@@ -133,6 +135,8 @@ src/edge_engine/
   roster/        the roster-state interface + manual CSV and live ESPN implementations,
                  plus the ESPN-only matchup/opponent-data protocol
   ranking/       free-agent ranking, usage-trend explanations, roster-fit re-ranking
+  insights/      Phase 3 roster diagnosis — usage-vs-production divergence, bye-adjusted
+                 worst-week scarcity, bye/stacking/injury exposure
   simulation/    Monte Carlo matchup simulation + brute-force FLEX optimizer (ESPN-only)
   weekly.py      single weekly entry point — refresh current-season data, run rankings
                  and (if live) the matchup simulator, with clear errors instead of tracebacks
@@ -163,4 +167,4 @@ scope boundary rather than an oversight.
 pytest
 ```
 
-162 tests, no live network calls or credentials required.
+182 tests, no live network calls or credentials required.

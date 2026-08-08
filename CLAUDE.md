@@ -40,6 +40,7 @@ switch. Keep it that way.
 
 ```bash
 python -m edge_engine.weekly                              # the weekly command
+python -m edge_engine.insights [--week N] [--all]         # roster diagnosis (Phase 3)
 python -m edge_engine.ranking.roster_fit [--top N|--all]  # rankings only
 python -m edge_engine.simulation.matchup_cli [--week N]   # matchup + FLEX optimizer
 python -m edge_engine.model.train                         # occasional, NOT weekly
@@ -104,6 +105,15 @@ reliably manufacture 2–6pp "improvements" that vanish or invert on the next se
 - **Config values are validated at load.** An out-of-range `team_correlation` used to
   produce silent NaN through every simulated score while still reporting an exact,
   fabricated "0.0% win probability."
+
+## Phase 3 (`insights/`) — one thing to know
+
+`divergence.py` defines its own usage composite (mean of per-metric z-scores against the
+positional pool). The Phase 3–5 PRD says to "reuse the existing `opportunity_score`
+composite" — **there is no such composite**; that instruction is wrong, and the
+correction is written up in `docs/PRD-phase-3-5-corrections.md`. The composite here is
+descriptive, for divergence only. **Never feed it back into the opportunity model as a
+feature** — it's computed from the same window it describes, so that would be a leak.
 
 ## Explicit scope boundaries (PRD non-goals — don't "helpfully" add these)
 
