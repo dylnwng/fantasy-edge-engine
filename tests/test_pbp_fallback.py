@@ -145,3 +145,24 @@ def test_season_with_no_play_by_play_fails_with_a_clear_message(monkeypatch):
     )
     with pytest.raises(RuntimeError, match="no play-by-play"):
         build_weekly_from_pbp(2099)
+
+
+def test_a_player_with_no_targets_gets_null_share_not_zero():
+    # nflverse never emits a 0.0 target_share -- only NaN or positive
+    # (verified against real 2024: 659 of 664 QB rows are NaN, as are
+    # 350 RB and 35 WR rows). This is load-bearing, not cosmetic:
+    # features.py drops null-feature rows, and that is the mechanism
+    # keeping quarterbacks out of a model whose receiving-usage
+    # features carry no signal for them. Emitting 0.0 silently reversed
+    # that documented scope boundary.
+    weekly = pd.DataFrame(
+        [
+            {"season": 2025, "week": 1, "player_id": "QB1", "team": "KC", "targets": 0.0, "air_yards": 0.0},
+            {"season": 2025, "week": 1, "player_id": "WR1", "team": "KC", "targets": 4.0, "air_yards": 40.0},
+        ]
+    )
+    out = _attach_shares(weekly).set_index("player_id")
+
+    assert pd.isna(out.loc["QB1", "target_share"])
+    assert pd.isna(out.loc["QB1", "air_yards_share"])
+    assert out.loc["WR1", "target_share"] == pytest.approx(1.0)

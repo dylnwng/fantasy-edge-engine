@@ -216,9 +216,25 @@ def _attach_shares(weekly: pd.DataFrame) -> pd.DataFrame:
         .rename(columns={"targets": "team_targets", "air_yards": "team_air_yards"})
     )
     weekly = weekly.merge(team_totals, on=["season", "week", "team"], how="left")
-    weekly["target_share"] = (weekly["targets"] / weekly["team_targets"]).where(weekly["team_targets"] > 0)
+
+    # A player with no targets at all has an UNDEFINED receiving share,
+    # not a zero one, and nflverse agrees: checked against real 2024
+    # data, it never emits a 0.0 target_share -- only NaN or positive
+    # (659 of 664 QB rows are NaN, as are 350 RB and 35 WR rows).
+    #
+    # This matters far beyond cosmetics. features.py drops rows with
+    # null features, which is the mechanism that keeps quarterbacks out
+    # of a model whose receiving-usage features carry no signal for them
+    # (see EVALUATION.md's QB scope gap). Emitting 0.0 here silently
+    # reversed that documented boundary: 659 reconstructed QB rows
+    # survived the completeness check and got scored on meaningless
+    # features.
+    had_targets = weekly["targets"] > 0
+    weekly["target_share"] = (weekly["targets"] / weekly["team_targets"]).where(
+        had_targets & (weekly["team_targets"] > 0)
+    )
     weekly["air_yards_share"] = (weekly["air_yards"] / weekly["team_air_yards"]).where(
-        weekly["team_air_yards"] > 0
+        had_targets & (weekly["team_air_yards"] > 0)
     )
     return weekly
 

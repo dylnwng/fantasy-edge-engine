@@ -370,21 +370,44 @@ max single-row difference of 10.1 points, almost certainly return touchdowns and
 non-scrimmage scoring that play-by-play attributes differently — irrelevant to a
 usage-trend model, but real and worth stating rather than hiding behind the averages.)
 
-**The true holdout result.** With 2025 ingested, the *already-shipped* model — trained on
-2018–2023, never exposed to 2024 or 2025 in any form — could be tested on a season that
-did not exist in this pipeline an hour earlier:
+**The holdout result.** With 2025 ingested, the model could be tested on a season that
+did not exist in this pipeline an hour earlier and was therefore impossible to tune
+against:
 
-| | 2024 (the chosen validation season) | 2025 (true holdout) |
+| | 2024 (the chosen validation season) | 2025 (holdout) |
 |---|---|---|
-| Model MAE | 5.05 | 5.23 |
+| Model MAE | 5.05 | 5.17 |
 | Baseline MAE | 5.60 | 5.66 |
-| Improvement over baseline | 9.8% | **7.5%** |
-| Hit rate at margin 3.0 | 72.4% | **69.4%** (n=451) |
+| Improvement over baseline | 9.8% | **8.7%** |
+| Hit rate at margin 3.0 (1wk / 3wk) | 72.4% / 81.6% | **67.6% / 80.3%** (n=355) |
 
-**The edge is real and it generalizes.** It degrades modestly — about two points of hit
-rate and two points of MAE improvement — which is roughly what two years of roster and
-scheme drift should cost. That is a far stronger claim than the original 2024 number,
-because nothing about 2025 was available to tune against.
+**The edge is real and it generalizes**, degrading modestly — roughly what a year of
+roster and scheme drift should cost. That is a stronger claim than the original 2024
+number, because nothing about 2025 was available to tune against.
+
+### A bug the reconstruction introduced, and what it cost
+
+The first version of these numbers (published briefly as 5.23 MAE / 68.8% hit rate on
+n=3196) was **wrong**, and the cause is worth recording because it is the exact failure
+mode this project keeps legislating against.
+
+`_attach_shares` computed `target_share = targets / team_targets`. For a quarterback that
+is `0 / positive = 0.0` — a perfectly valid number. nflverse instead emits **NaN**:
+checked against real 2024 data, it never produces a `0.0` target share at all, only NaN
+or positive (659 of 664 QB rows, plus 350 RB and 35 WR rows, are NaN).
+
+That difference is load-bearing. `features.py` drops rows with null features, and *that
+drop is the mechanism* keeping quarterbacks out of a model whose receiving-usage features
+carry no signal for them — the scope gap documented above. Emitting `0.0` silently
+reversed it: 659 reconstructed QB rows survived the completeness check and were scored on
+meaningless features, inflating the validation set from 2,413 to 3,196 rows and
+contaminating every number measured from it.
+
+Nothing crashed. No test failed. The reconstruction still validated at 0.999 correlation
+against nflverse, because the validation compared only rows where *both* sources were
+non-null — precisely the rows where the bug wasn't. A silent scope-boundary reversal that
+survives its own validation gate is a good argument for checking null *semantics*, not
+just numeric agreement, whenever you reconstruct someone else's data format.
 
 ## Three things that looked like edge and weren't
 

@@ -13,14 +13,14 @@ I made and caught along the way.
 
 | | Model | Naive baseline |
 |---|---|---|
-| Next-week point error (2025 holdout MAE) | **5.23** | 5.66 |
-| Hit rate on flagged players (next week / following 3 weeks) | **68.8% / 80.1%** | — |
+| Next-week point error (2025 holdout MAE) | **5.17** | 5.66 |
+| Hit rate on flagged players (next week / following 3 weeks) | **67.6% / 80.3%** | — |
 
-Those are **true holdout** numbers: 2025 was unavailable to this project until the
-play-by-play reconstruction in `ingestion/pbp_fallback.py` was built and validated, so
-nothing was tuned against it. On the originally-chosen 2024 validation season the model
-scores better (5.05 MAE, 72.4% hit rate) — the gap between those two is roughly what
-two years of roster and scheme drift costs, and the smaller number is the honest one.
+Those are **held-out** numbers on 2025, a season that was unavailable to this project
+until the play-by-play reconstruction in `ingestion/pbp_fallback.py` was built and
+validated — so nothing was tuned against it. On the originally-chosen 2024 validation
+season the model scores better (5.05 MAE, 72.4% hit rate); the gap is roughly what a
+year of roster and scheme drift costs, and the smaller number is the honest one.
 
 A second capability answers a different, related question — not "who should I pick up,"
 but "who should I start": a Monte Carlo matchup simulator plays out your actual
@@ -163,4 +163,4 @@ scope boundary rather than an oversight.
 pytest
 ```
 
-161 tests, no live network calls or credentials required.
+162 tests, no live network calls or credentials required.
