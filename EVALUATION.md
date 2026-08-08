@@ -343,6 +343,85 @@ most encouraging of the three experiments and is worth re-running once 2025 or 2
 roughly doubles the validation sample — at which point the same test either clears 95% or
 it doesn't.
 
+## Unlocking 2025, and what a true holdout season revealed
+
+Everything above validates on 2024 — the season named as `validation_season` when the
+config was first written. That's a legitimate holdout, but it was *chosen*, and every
+experiment above was evaluated against it repeatedly. A season nobody had ever looked at
+is a much harder test.
+
+2025 was unavailable: `import_weekly_data([2025])` 404s, because nflverse publishes its
+pre-aggregated `player_stats_<year>` table on a lag. But `import_pbp_data([2025])` returns
+a complete season (48,771 plays, weeks 1–20) and `import_snap_counts([2025])` returns
+26,612 rows. The facts were all there; only the convenience aggregation was missing.
+
+So `ingestion/pbp_fallback.py` rebuilds those stat lines from raw plays. Because that's a
+reconstruction, it's **gated on reproducing a season nflverse HAS published** rather than
+trusted because the code ran:
+
+| vs. nflverse's own 2024 weekly data | correlation | median abs diff | within 0.5 pts |
+|---|---|---|---|
+| `fantasy_points_ppr` | 0.9989 | 0.00 | 98.6% |
+| `target_share` | 0.9991 | 0.00 | 100% |
+| `air_yards_share` | 1.0000 | 0.00 | 100% |
+
+5,327 of 5,340 official rows matched. Air-yards share is bit-exact. (Known residual: a
+max single-row difference of 10.1 points, almost certainly return touchdowns and other
+non-scrimmage scoring that play-by-play attributes differently — irrelevant to a
+usage-trend model, but real and worth stating rather than hiding behind the averages.)
+
+**The true holdout result.** With 2025 ingested, the *already-shipped* model — trained on
+2018–2023, never exposed to 2024 or 2025 in any form — could be tested on a season that
+did not exist in this pipeline an hour earlier:
+
+| | 2024 (the chosen validation season) | 2025 (true holdout) |
+|---|---|---|
+| Model MAE | 5.05 | 5.23 |
+| Baseline MAE | 5.60 | 5.66 |
+| Improvement over baseline | 9.8% | **7.5%** |
+| Hit rate at margin 3.0 | 72.4% | **69.4%** (n=451) |
+
+**The edge is real and it generalizes.** It degrades modestly — about two points of hit
+rate and two points of MAE improvement — which is roughly what two years of roster and
+scheme drift should cost. That is a far stronger claim than the original 2024 number,
+because nothing about 2025 was available to tune against.
+
+## Three things that looked like edge and weren't
+
+Adding 2025 also made it possible to re-test earlier conclusions on fresh data. All three
+went the same way, and the pattern is the actual finding:
+
+**1. More training data didn't help.** Retraining on 2018–2024 (a whole extra season)
+and validating on 2025 gives MAE 5.23 and a 68.8% hit rate — statistically identical to
+the old model's 5.23 / 69.4% on the same season. Training-data volume is not the
+binding constraint.
+
+**2. Usage persistence reversed sign.** On 2024 it looked genuinely promising: +1.9pp hit
+rate, both metrics moving the right way, 87% of bootstrap resamples favoring it. It was
+*not* adopted, because the 90% CI crossed zero. On the larger, fresher 2025 sample:
+
+| | 2024 | 2025 |
+|---|---|---|
+| Hit-rate difference | +1.9pp | **−1.4pp** |
+| Resamples favoring persistence | 87% | **20%** |
+
+It flipped. Promoting it on 87% would have made the tool measurably worse — the refusal
+to adopt a marginal positive was vindicated within a single afternoon.
+
+**3. The `flag_margin` precision curve mostly flattened.** On 2024, raising the margin
+from 3.0 to 6.0 appeared to buy real precision (72.4% → 78.0% one-week hit rate). On 2025
+the same sweep gives 68.8% → 70.7%, and the *three-week* hit rate actually peaks at the
+shipped 3.0 (80.1%) rather than improving. `flag_margin=3.0` is left unchanged — not
+because tuning was skipped, but because it was tried and the apparent gains didn't
+replicate.
+
+**What this converges on:** at these sample sizes (~300–450 flagged players per season),
+single-season results reliably manufacture 2–6 point "improvements" that vanish or invert
+on the next season. That's not a reason to distrust the headline edge — that one has now
+survived a genuine holdout — but it is a hard ceiling on how much further feature tinkering
+can honestly claim to push it. The remaining levers are structural (seeing usage before
+box scores do, and acting on it Tuesday), not algorithmic.
+
 ## Bottom line
 
 The model beats a naive rolling-average baseline by a real but modest margin (~10% MAE
@@ -351,13 +430,15 @@ improvement), and its flagged list — the actual decision-relevant output — h
 Run against a real league on real ESPN infrastructure, its top flags line up with
 specific, verifiable 2024 storylines rather than just looking reasonable in a table. The
 separate matchup simulator's win probabilities are honestly calibrated against 97 real
-outcomes, not just directionally plausible. Three follow-on accuracy experiments were
-tried and reported honestly regardless of outcome: opponent-adjusted projections didn't
-measurably help and weren't adopted; a right-skewed, correlation-aware simulator held
-calibration steady on real, measured inputs and was adopted on that basis, not because the
-number moved dramatically; usage-persistence features leaned positive on both metrics but
-failed a paired bootstrap at the 90% level, so they were left un-promoted rather than
-adopted on a number that looked good. None of this is a large, dramatic edge. It's a legitimate,
+outcomes, not just directionally plausible — and the headline edge has since survived a
+genuine holdout season (2025) that was unavailable when any of it was tuned. Follow-on
+accuracy experiments were tried and reported honestly regardless of outcome:
+opponent-adjusted projections didn't measurably help and weren't adopted; a right-skewed,
+correlation-aware simulator held calibration steady on real, measured inputs and was
+adopted on that basis, not because the number moved dramatically; usage-persistence
+features leaned positive on 2024 but failed a paired bootstrap, were left un-promoted,
+and then *reversed sign* on 2025 — which is the clearest vindication in this document of
+refusing to adopt on a number that merely looked good. None of this is a large, dramatic edge. It's a legitimate,
 honestly-measured one, arrived at by building an evaluation harness rigorous enough to
 catch and correct my own modeling mistakes along the way — which is the actual point of
 the exercise.

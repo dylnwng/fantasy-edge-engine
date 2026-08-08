@@ -23,7 +23,7 @@ import warnings
 
 import pandas as pd
 
-from edge_engine.ingestion.raw import fetch_weekly_data
+from edge_engine.ingestion.raw import fetch_weekly_data_or_reconstruct
 from edge_engine.roster.models import ScoringSettings
 
 # bonus config key -> raw weekly_data column(s) to sum, and the sign
@@ -88,7 +88,7 @@ def compute_points_for_seasons(seasons: list[int], scoring: ScoringSettings) -> 
         return pd.DataFrame(columns=["season", "week", "player_id", "points"])
     frames = []
     for season in seasons:
-        weekly = fetch_weekly_data(season)
+        weekly = fetch_weekly_data_or_reconstruct(season)
         weekly = weekly[weekly["season_type"] == "REG"].copy()
         weekly["points"] = compute_fantasy_points(weekly, scoring).to_numpy()
         frames.append(weekly[["season", "week", "player_id", "points"]])

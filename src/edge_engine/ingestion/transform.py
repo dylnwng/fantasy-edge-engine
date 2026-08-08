@@ -46,14 +46,18 @@ OUTPUT_COLUMNS = BASE_COLUMNS[:-1] + [
 
 
 def _base_usage(season: int, force_refresh: bool) -> pd.DataFrame:
-    weekly = raw.fetch_weekly_data(season, force_refresh)
+    weekly = raw.fetch_weekly_data_or_reconstruct(season, force_refresh)
     weekly = weekly[weekly["season_type"] == "REG"].copy()
-    # weekly data has both `player_name` (abbreviated) and `player_display_name`
-    # (full); drop the former so the rename below doesn't produce a duplicate
-    # `player_name` column.
-    weekly = weekly.drop(columns=["player_name"]).rename(
-        columns={"player_display_name": "player_name", "recent_team": "team"}
-    )
+    # nflverse's own weekly table carries both `player_name` (abbreviated)
+    # and `player_display_name` (full), plus `recent_team`; the
+    # play-by-play reconstruction (pbp_fallback.py) already emits the
+    # normalized `player_name`/`team` names. Rename conditionally so
+    # either source lands on the same schema instead of the fallback
+    # path KeyError-ing on columns it was never going to have.
+    if "player_display_name" in weekly.columns:
+        weekly = weekly.drop(columns=["player_name"]).rename(columns={"player_display_name": "player_name"})
+    if "recent_team" in weekly.columns:
+        weekly = weekly.rename(columns={"recent_team": "team"})
     return weekly[
         [
             "season",

@@ -13,8 +13,14 @@ I made and caught along the way.
 
 | | Model | Naive baseline |
 |---|---|---|
-| Next-week point error (validation MAE) | **5.05** | 5.60 |
-| Hit rate on flagged players (next week / following 3 weeks) | **72.4% / 81.6%** | — |
+| Next-week point error (2025 holdout MAE) | **5.23** | 5.66 |
+| Hit rate on flagged players (next week / following 3 weeks) | **68.8% / 80.1%** | — |
+
+Those are **true holdout** numbers: 2025 was unavailable to this project until the
+play-by-play reconstruction in `ingestion/pbp_fallback.py` was built and validated, so
+nothing was tuned against it. On the originally-chosen 2024 validation season the model
+scores better (5.05 MAE, 72.4% hit rate) — the gap between those two is roughly what
+two years of roster and scheme drift costs, and the smaller number is the honest one.
 
 A second capability answers a different, related question — not "who should I pick up,"
 but "who should I start": a Monte Carlo matchup simulator plays out your actual
@@ -31,7 +37,7 @@ nflverse (play-by-play, snap counts, injuries)
         │
         ▼
   opportunity model  ──►  XGBoost, trailing 2-game usage trend → next-week points
-        │                 trained 2018–2023, validated on held-out 2024
+        │                 trained 2018–2024, validated on held-out 2025
         ▼
   injury context     ──►  flags when a usage spike coincides with an injury to
         │                 the same-position player who had the role before
@@ -71,7 +77,7 @@ One-time setup:
 ```bash
 python3 -m venv .venv && source .venv/bin/activate  # Python 3.11+
 bash scripts/install.sh          # nfl_data_py needs a two-step install, see the script
-python -m edge_engine.ingestion.pipeline --seasons 2018 2019 2020 2021 2022 2023 2024
+python -m edge_engine.ingestion.pipeline --seasons 2018 2019 2020 2021 2022 2023 2024 2025
 python -m edge_engine.model.train
 ```
 
@@ -157,4 +163,4 @@ scope boundary rather than an oversight.
 pytest
 ```
 
-153 tests, no live network calls or credentials required.
+161 tests, no live network calls or credentials required.

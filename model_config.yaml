@@ -4,8 +4,8 @@
 # Validated on a held-out SEASON, not held-out weeks within a season —
 # within-season weeks are correlated (a hot player stays hot for a few
 # weeks), so a week-level split would leak signal and overstate accuracy.
-train_seasons: [2018, 2019, 2020, 2021, 2022, 2023]
-validation_season: 2024
+train_seasons: [2018, 2019, 2020, 2021, 2022, 2023, 2024]
+validation_season: 2025
 
 # Trailing window (in games actually played, not calendar weeks) used to
 # build usage-trend features. PRD calls for 2-3 weeks; 2 means the model
