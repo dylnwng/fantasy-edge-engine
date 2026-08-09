@@ -115,6 +115,23 @@ correction is written up in `docs/PRD-phase-3-5-corrections.md`. The composite h
 descriptive, for divergence only. **Never feed it back into the opportunity model as a
 feature** — it's computed from the same window it describes, so that would be a leak.
 
+## Phase 5-lite (`draft/`) — what it does and doesn't claim
+
+**The board prices everything at ADP on purpose and claims no edge over the market.**
+Its value is bookkeeping under a 90-second clock (tier cliffs, positional runs, a
+shrinking pool), which is why it ships with no kill gate. The one narrow edge claim is
+the divergence tag: a player whose usage spiked in weeks 13–17 is priced at an ADP
+reflecting his *full-season* average. That's a tag, never a re-ranking.
+
+Do **not** add custom preseason projections without the §4.3 gate (beat ADP on a
+held-out season). A failed model must degrade the tool to an ADP board, not ship
+projections styled identically to validated ones.
+
+`data/draft/adp.example.csv` has **synthetic** ADP (real names, ordered by last
+season's points). It exists so the board runs out of the box; replace it with a real
+export before trusting anything. Live ESPN draft sync (§4.4) is unbuilt — it needs the
+`mDraftDetail` spike against a mock draft first.
+
 ## Explicit scope boundaries (PRD non-goals — don't "helpfully" add these)
 
 No FAAB dollar amounts (confidence tiers only) · no trade scanner or opponent-roster

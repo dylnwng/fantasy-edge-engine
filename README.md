@@ -110,6 +110,8 @@ traceback. The individual pieces are still available directly if you want just o
 them:
 
 ```bash
+python -m edge_engine.draft                             # draft board, priced at ADP (Phase 5-lite)
+python -m edge_engine.draft --live                      # live pick tracker + tier cliffs
 python -m edge_engine.insights                          # what's wrong with my roster (Phase 3)
 python -m edge_engine.insights --week 12 --all          # a past week, neutral players listed
 python -m edge_engine.ranking.roster_fit                # free-agent rankings only
@@ -137,6 +139,8 @@ src/edge_engine/
   ranking/       free-agent ranking, usage-trend explanations, roster-fit re-ranking
   insights/      Phase 3 roster diagnosis — usage-vs-production divergence, bye-adjusted
                  worst-week scarcity, bye/stacking/injury exposure
+  draft/         Phase 5-lite draft board — ADP pricing behind a MarketPriceSource
+                 Protocol, tier cliffs, positional-run detection, live pick tracking
   simulation/    Monte Carlo matchup simulation + brute-force FLEX optimizer (ESPN-only)
   weekly.py      single weekly entry point — refresh current-season data, run rankings
                  and (if live) the matchup simulator, with clear errors instead of tracebacks
@@ -167,4 +171,4 @@ scope boundary rather than an oversight.
 pytest
 ```
 
-182 tests, no live network calls or credentials required.
+204 tests, no live network calls or credentials required.

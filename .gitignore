@@ -7,3 +7,4 @@ data/processed/
 models/
 .pytest_cache/
 .env
+data/draft/adp.csv
