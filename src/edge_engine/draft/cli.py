@@ -23,7 +23,7 @@ import argparse
 import pandas as pd
 
 from edge_engine.draft.board import BoardPlayer, build_board, late_season_divergence
-from edge_engine.draft.market import ManualMarketPriceSource
+from edge_engine.draft.market import default_market_source
 from edge_engine.draft.tracker import DraftState, Pick, unfilled_slots
 from edge_engine.model.scoring import compute_points_for_seasons
 from edge_engine.paths import PLAYER_WEEK_PATH
@@ -127,7 +127,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args(argv)
 
-    source = ManualMarketPriceSource()
+    league_config = get_default_source().get_league_config()
+    source = default_market_source(
+        year=league_config.season, ppr_type=league_config.scoring.ppr_type
+    )
     prices = source.get_market_prices()
 
     if args.season is not None:
@@ -148,7 +151,6 @@ def main(argv: list[str] | None = None) -> None:
     if args.serve:
         from edge_engine.draft.server import ServerState, serve
 
-        league_config = get_default_source().get_league_config()
         pick_source = None
         if args.espn:
             from edge_engine.draft.live import EspnDraftPickSource
@@ -167,7 +169,6 @@ def main(argv: list[str] | None = None) -> None:
         print(render_board(board, gaps, args.limit, provenance))
         return
 
-    league_config = get_default_source().get_league_config()
     state = DraftState(board=board)
     my_picks: list[BoardPlayer] = []
     by_name = {b.name.lower(): b for b in board}

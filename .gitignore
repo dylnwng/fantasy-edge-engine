@@ -8,3 +8,4 @@ models/
 .pytest_cache/
 .env
 data/draft/adp.csv
+data/draft/adp_ffc_*.json

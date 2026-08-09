@@ -194,18 +194,14 @@ your league's waivers process. Usage data for a given week isn't available
 until that week's games finish, so this is inherently a
 midweek tool.
 
-### Draft board setup (optional)
+### Draft board
 
-The board needs an ADP export you provide:
+Nothing to set up — the board pulls live ADP automatically from Fantasy
+Football Calculator's public API, matched to your league's scoring and size,
+cached for 12 hours.
 
-```bash
-cp data/draft/adp.example.csv data/draft/adp.csv
-```
-
-⚠️ **The bundled example has fake ADP numbers** — real player names, but
-ordered by last season's points. Replace them with a real export
-(FantasyPros, Sleeper, Underdog — any source, four columns:
-`name,position,team,adp`) before drafting off it. Details in
+If that service is ever unreachable it falls back to a hand-exported
+`data/draft/adp.csv` (four columns: `name,position,team,adp`). Details in
 [`data/draft/README.md`](data/draft/README.md).
 
 ---

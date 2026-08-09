@@ -236,3 +236,68 @@ def test_two_players_sharing_a_name_are_removed_one_at_a_time():
         [Pick(1, 1, "Michael Thomas"), Pick(1, 2, "Michael Thomas")]
     ).available()
     assert [b.name for b in after_two] == ["Other"]
+
+
+# ---- live ADP source ----
+
+def _ffc_payload(players):
+    return {"status": "Success", "players": players}
+
+
+def _ffc_source(tmp_path, payload, **kw):
+    """A source wired to a fixture file instead of the network."""
+    import json
+
+    from edge_engine.draft.market import FantasyFootballCalculatorSource
+
+    src = FantasyFootballCalculatorSource(
+        year=2026, lookup=_StubLookup(), cache_dir=tmp_path, **kw
+    )
+    src._cache_path.parent.mkdir(parents=True, exist_ok=True)
+    src._cache_path.write_text(json.dumps(payload))
+    return src
+
+
+def test_live_adp_normalises_position_labels(tmp_path):
+    # FFC calls team defenses DEF and kickers PK; this project uses DST
+    # and K. Without normalising, every kicker and defense falls out of
+    # the board's position filter silently.
+    payload = _ffc_payload([
+        {"name": "Some Defense", "position": "DEF", "team": "SF", "adp": 120.0},
+        {"name": "Some Kicker", "position": "PK", "team": "DAL", "adp": 140.0},
+        {"name": "Some Back", "position": "RB", "team": "ATL", "adp": 2.0},
+    ])
+    prices = {p.name: p for p in _ffc_source(tmp_path, payload).get_market_prices()}
+
+    assert prices["Some Defense"].position == "DST"
+    assert prices["Some Kicker"].position == "K"
+    assert prices["Some Back"].position == "RB"
+
+
+def test_live_adp_snaps_to_a_league_size_the_service_publishes(tmp_path):
+    # FFC only publishes 8/10/12/14-team boards; an 11-team league should
+    # get the nearest rather than a 404.
+    payload = _ffc_payload([{"name": "A", "position": "RB", "team": "SF", "adp": 1.0}])
+    assert _ffc_source(tmp_path, payload, teams=11).teams in (10, 12)
+    assert _ffc_source(tmp_path, payload, teams=13).teams in (12, 14)
+
+
+def test_live_adp_maps_league_scoring_to_the_right_board(tmp_path):
+    payload = _ffc_payload([{"name": "A", "position": "RB", "team": "SF", "adp": 1.0}])
+    half = _ffc_source(tmp_path, payload, ppr_type="half_ppr")
+    assert "half-ppr" in half._cache_path.name
+    assert "half ppr" in half.describe()
+
+
+def test_live_adp_rejects_a_scoring_type_the_service_has_no_board_for():
+    from edge_engine.draft.market import FantasyFootballCalculatorSource
+
+    with pytest.raises(RuntimeError, match="isn't available for scoring type"):
+        FantasyFootballCalculatorSource(year=2026, ppr_type="double_ppr")
+
+
+def test_live_adp_uses_cache_without_touching_the_network(tmp_path):
+    # The cache write in _ffc_source is fresh, so no fetch should happen.
+    payload = _ffc_payload([{"name": "Cached Guy", "position": "WR", "team": "KC", "adp": 5.0}])
+    prices = _ffc_source(tmp_path, payload).get_market_prices()
+    assert [p.name for p in prices] == ["Cached Guy"]

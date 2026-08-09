@@ -435,9 +435,12 @@ with tab_draft:
 
     try:
         from edge_engine.draft.board import build_board, late_season_divergence
-        from edge_engine.draft.market import ManualMarketPriceSource
+        from edge_engine.draft.market import default_market_source
 
-        prices = ManualMarketPriceSource().get_market_prices()
+        market = default_market_source(
+            year=league_config.season, ppr_type=league_config.scoring.ppr_type
+        )
+        prices = market.get_market_prices()
         merged, usage_season, _lw, season_note = load_usage()
         late, late_notes = late_season_divergence(merged, merged["points"], season=usage_season)
         board, board_notes = build_board(prices, divergence_by_id=late)
@@ -445,8 +448,9 @@ with tab_draft:
         _heads_up(([season_note] if season_note else [])
                   + [_friendly(n) for n in late_notes + board_notes])
         st.caption(
-            "Sorted by ADP — where players are actually going in drafts. The notes flag guys "
-            "whose workload down the stretch last year doesn't match where they're being drafted."
+            f"{market.describe()}. Sorted by ADP — where players are actually going in drafts. "
+            "The notes flag guys whose workload down the stretch last year doesn't match where "
+            "they're being drafted."
         )
 
         board_positions = sorted({b.position for b in board})

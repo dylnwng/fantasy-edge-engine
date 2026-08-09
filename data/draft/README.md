@@ -1,5 +1,16 @@
 # Draft inputs
 
+## Where ADP comes from
+
+**By default the board pulls live ADP automatically** from Fantasy Football
+Calculator's public API — real aggregate ADP from actual mock drafts, matched to
+your league's scoring and size. Nothing to set up, and it's cached for 12 hours
+so it doesn't hammer a free service.
+
+Everything below is the manual fallback, used only if that service is
+unreachable. A draft is an unrepeatable event, so a local file must always be
+able to take over.
+
 ## `adp.csv`
 
 Average draft position, exported once in August from wherever you like

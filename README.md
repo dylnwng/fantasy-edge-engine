@@ -119,7 +119,7 @@ traceback. The individual pieces are still available directly if you want just o
 them:
 
 ```bash
-python -m edge_engine.draft                             # draft board, priced at ADP (Phase 5-lite)
+python -m edge_engine.draft                             # draft board, live ADP (Phase 5-lite)
 python -m edge_engine.draft --live                      # live pick tracker + tier cliffs
 python -m edge_engine.draft --serve [--espn]            # draft-night browser screen
 python -m edge_engine.trade --out "A" --in "B"          # trade surfacer (no verdict)
