@@ -197,6 +197,45 @@ def test_qb_rows_from_the_separate_model_are_unioned_in(tmp_path, monkeypatch):
     assert result.iloc[0]["player_id"] == "QB1"
 
 
+def test_qb_rows_survive_an_empty_main_model_pool(tmp_path, monkeypatch):
+    # The two models read DIFFERENT sources: the main model scores off the
+    # ingested player_week table, while the QB model builds its features
+    # from play-by-play directly. So the main pool can be legitimately
+    # empty (usage table stale or not yet ingested for this season, or the
+    # points join came back empty on nflverse's publish lag) while the QB
+    # model has perfectly good rows. Short-circuiting on the main pool
+    # alone silently drops every quarterback.
+    rows = [_usage_row("P1", 2025, 1)]  # one game -> no full trailing window
+    _write_player_week(tmp_path, rows, monkeypatch)
+    _patch_common(monkeypatch, rows, model=_SpyModel([]))
+
+    qb_row = pd.DataFrame([{
+        "season": 2025, "week": 1, "player_id": "QB1", "position": "QB", "team": "KC",
+        "trailing_points_avg": 18.0, "predicted_score": 25.0, "baseline_score": 18.0, "flagged": True,
+        "has_injury_context": False, "injury_explanation": "", "roster_status_note": None,
+        "usage_explanation": "Pass attempts up 30 -> 40.",
+    }])
+    monkeypatch.setattr("edge_engine.model.predict_qb.score_qbs_as_of_week", lambda *a, **k: qb_row)
+
+    result = predict.score_as_of_week(2025, target_week=2, config=_config())
+
+    assert list(result["player_id"]) == ["QB1"]
+    assert result.iloc[0]["predicted_score"] == 25.0
+
+
+def test_both_pools_empty_still_returns_the_expected_empty_shape(tmp_path, monkeypatch):
+    rows = [_usage_row("P1", 2025, 1)]
+    _write_player_week(tmp_path, rows, monkeypatch)
+    _patch_common(monkeypatch, rows, model=_SpyModel([]))
+
+    result = predict.score_as_of_week(2025, target_week=2, config=_config())
+
+    assert result.empty
+    for col in ["predicted_score", "baseline_score", "flagged", "has_injury_context",
+                "injury_explanation", "roster_status_note"]:
+        assert col in result.columns
+
+
 def test_score_latest_week_derives_season_and_next_week_from_ingested_data(tmp_path, monkeypatch):
     rows = [
         _usage_row("P1", 2024, 1),

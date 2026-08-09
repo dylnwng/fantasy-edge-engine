@@ -1,7 +1,7 @@
 # Edge Engine — orientation for a new agent
 
 Fantasy football waiver-wire tool for one specific private ESPN league. Python 3.11+,
-235 tests, no network calls or credentials required to run the suite.
+291 tests, no network calls or credentials required to run the suite.
 
 ```bash
 source .venv/bin/activate && python -m pytest tests/ -q
