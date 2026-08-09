@@ -39,6 +39,11 @@ LATE_SEASON_WEEKS = (13, 14, 15, 16, 17)
 # draft to tune against anyway.
 TIER_GAP_PICKS = 12.0
 
+# Positions with no player-level usage data in nflverse at all, so they can
+# never carry a buy-low/sell-high tag. They still belong ON the board -- you
+# draft them -- but their untagged state is by design, not a data problem.
+_NO_USAGE_DATA_POSITIONS = frozenset({"K", "DST"})
+
 
 @dataclass(frozen=True)
 class BoardPlayer:
@@ -123,7 +128,10 @@ def build_board(
             if price.player_id is None:
                 unresolved += 1
                 low_confidence = True
-                tags.append("no usage history matched — priced at ADP only")
+                if position in _NO_USAGE_DATA_POSITIONS:
+                    tags.append("ranked by ADP — this position isn't modeled")
+                else:
+                    tags.append("no usage history matched — priced at ADP only")
             elif price.player_id in rookie_ids:
                 low_confidence = True
                 tags.append("rookie — no NFL usage history, priced at ADP only")
@@ -152,10 +160,25 @@ def build_board(
             )
 
     if unresolved:
-        gaps.append(
-            f"{unresolved} of {len(prices)} ADP entries did not resolve to a player in the "
-            "usage data and carry no divergence tag. Check spelling/team in the ADP export."
+        # Kickers and team defenses have no player-level usage data at all
+        # -- they can never carry a tag, and saying "check the spelling"
+        # about them is actively misleading advice. Separate the expected
+        # case from the one actually worth looking into.
+        no_stats_by_design = sum(
+            1 for p in prices if p.player_id is None and p.position in _NO_USAGE_DATA_POSITIONS
         )
+        worth_checking = unresolved - no_stats_by_design
+
+        if no_stats_by_design:
+            gaps.append(
+                f"{no_stats_by_design} kicker/defense entries carry no buy-low or sell-high tag. "
+                "That's expected — there's no snap or target data for those positions."
+            )
+        if worth_checking:
+            gaps.append(
+                f"{worth_checking} player(s) couldn't be matched to stats, so they're priced at "
+                "ADP only. Usually rookies with no NFL history, or two players sharing a name."
+            )
 
     board.sort(key=lambda b: b.adp)
     return board, gaps

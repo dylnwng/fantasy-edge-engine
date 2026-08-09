@@ -87,7 +87,36 @@ def test_unresolved_players_stay_on_the_board_priced_at_adp():
 
     assert len(board) == 1  # surfaced, not dropped
     assert board[0].low_confidence
-    assert any("did not resolve" in g for g in gaps)
+    assert any("couldn't be matched" in g for g in gaps)
+
+
+def test_kickers_and_defenses_are_not_reported_as_a_data_problem():
+    """K and DST have no player-level usage data anywhere in nflverse, so an
+    untagged kicker is the system working as designed. Telling the user to go
+    check his spelling sends him hunting for a bug that does not exist."""
+    prices = [
+        MarketPrice(name="A Kicker", position="K", team="KC", adp=150.0, player_id=None),
+        MarketPrice(name="A Defense", position="DST", team="SF", adp=140.0, player_id=None),
+    ]
+    board, gaps = build_board(prices)
+
+    assert len(board) == 2  # still draftable, still on the board
+    blob = " ".join(gaps)
+    assert "expected" in blob
+    assert "spelling" not in blob
+    assert "couldn't be matched" not in blob
+
+
+def test_a_real_unmatched_skill_player_is_still_reported_separately():
+    """The expected K/DST case must not swallow the case worth looking into."""
+    prices = [
+        MarketPrice(name="A Kicker", position="K", team="KC", adp=150.0, player_id=None),
+        MarketPrice(name="Ghost", position="WR", team="KC", adp=50.0, player_id=None),
+    ]
+    _, gaps = build_board(prices)
+
+    assert any("expected" in g for g in gaps)
+    assert any("1 player(s) couldn't be matched" in g for g in gaps)
 
 
 def test_board_without_any_divergence_is_still_a_valid_adp_board():

@@ -4,7 +4,7 @@ import yaml
 
 from edge_engine.roster import manual_source
 from edge_engine.roster.manual_source import ManualRosterStateSource
-from edge_engine.roster.player_lookup import PlayerLookup
+from edge_engine.roster.player_lookup import PlayerLookup, _normalize_name
 
 
 class _StubLookup:
@@ -180,3 +180,68 @@ def test_player_lookup_disambiguates_by_team():
     gsis_id, status, _ = lookup.resolve("Josh Allen", "QB", "BUF")
     assert gsis_id == "00-1111"
     assert status == "matched"
+
+
+def _lookup(players_rows, team_to_name):
+    players = pd.DataFrame(players_rows)
+    players["_norm_name"] = players["display_name"].map(_normalize_name)
+    return PlayerLookup(players, team_to_name)
+
+
+def test_suffix_collision_is_broken_by_team_despite_nflverse_abbr_mismatch():
+    """nflverse's players table says "AZ"; its own team_desc table only
+    has "ARI". The unknown abbr used to map to NaN, so the suffix-stripped
+    "marvin harrison" stayed ambiguous against his father and the real
+    6th-round WR silently fell off the draft board."""
+    lookup = _lookup(
+        [
+            {"display_name": "Marvin Harrison", "position": "WR",
+             "latest_team": "IND", "gsis_id": "00-dad"},
+            {"display_name": "Marvin Harrison Jr.", "position": "WR",
+             "latest_team": "AZ", "gsis_id": "00-son"},
+        ],
+        {"ARI": "Arizona Cardinals", "IND": "Indianapolis Colts"},  # note: no "AZ"
+    )
+
+    assert lookup.resolve("Marvin Harrison Jr.", "WR", "ARI")[0] == "00-son"
+    assert lookup.resolve("Marvin Harrison", "WR", "IND")[0] == "00-dad"
+
+
+def test_two_way_player_listed_at_his_defensive_position_still_resolves():
+    """Travis Hunter is a CB in nflverse and a WR in every fantasy league.
+    Name plus team is a strong enough key to keep him."""
+    lookup = _lookup(
+        [{"display_name": "Travis Hunter", "position": "CB",
+          "latest_team": "JAX", "gsis_id": "00-hunter"}],
+        {"JAX": "Jacksonville Jaguars"},
+    )
+
+    gsis_id, status, note = lookup.resolve("Travis Hunter", "WR", "JAX")
+    assert (gsis_id, status) == ("00-hunter", "matched")
+    assert "CB" in note  # the position difference is stated, not hidden
+
+
+def test_position_fallback_will_not_grab_a_different_player_on_another_team():
+    lookup = _lookup(
+        [{"display_name": "Travis Hunter", "position": "CB",
+          "latest_team": "JAX", "gsis_id": "00-hunter"}],
+        {"JAX": "Jacksonville Jaguars", "KC": "Kansas City Chiefs"},
+    )
+
+    assert lookup.resolve("Travis Hunter", "WR", "KC")[0] is None
+
+
+def test_position_fallback_stays_out_of_the_way_when_the_name_is_shared():
+    """Two same-name players on the same team at different positions is
+    not something name+team can resolve -- it must decline, not guess."""
+    lookup = _lookup(
+        [
+            {"display_name": "Sam Same", "position": "CB",
+             "latest_team": "KC", "gsis_id": "00-a"},
+            {"display_name": "Sam Same", "position": "LB",
+             "latest_team": "KC", "gsis_id": "00-b"},
+        ],
+        {"KC": "Kansas City Chiefs"},
+    )
+
+    assert lookup.resolve("Sam Same", "WR", "KC")[0] is None

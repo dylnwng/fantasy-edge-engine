@@ -38,7 +38,7 @@ Check it worked:
 python -m pytest -q
 ```
 
-You should see ~235 tests pass. They use synthetic data only — no network,
+You should see ~249 tests pass. They use synthetic data only — no network,
 no credentials.
 
 ---
@@ -217,7 +217,7 @@ The common ones:
 | `No team with team_id=N in league M` | `ESPN_TEAM_ID` is wrong — check *your team's* URL, not the league's. |
 | `League's reception scoring is 1.5 pts/catch` | Unsupported scoring. It refuses rather than silently mis-scoring. |
 | `nflverse has no play-by-play for 2026 either` | That season hasn't been played yet. Normal in the offseason. |
-| `data/draft/adp.csv doesn't exist` | Draft board needs an ADP export (§5). |
+| `data/draft/adp.csv doesn't exist` | Live ADP was unreachable *and* there's no fallback file. Retry, or export one (§5). |
 | `0 rostered players` | Normal before your draft. The tool says so instead of showing zeros. |
 | Names in "Needs Attention" | Spelling/team mismatch in your CSV. They're surfaced, never silently dropped. |
 
