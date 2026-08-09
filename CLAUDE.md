@@ -1,6 +1,6 @@
 # Edge Engine — orientation for a new agent
 
-Fantasy football waiver-wire tool for one specific private ESPN league. Python 3.11+,
+Fantasy football waiver-wire tool for one specific private ESPN league. Python 3.12+,
 291 tests, no network calls or credentials required to run the suite.
 
 ```bash

@@ -1,6 +1,10 @@
 pandas==3.0.5
 numpy==2.5.1
-pyarrow==25.0.0
+# pinned <25: streamlit 1.61.0 (pinned below) requires pyarrow<25, so
+# pyarrow==25.0.0 made this file internally unsatisfiable -- scripts/install.sh
+# failed with ResolutionImpossible on every Python version. 24.0.0 is the
+# newest release satisfying streamlit; pandas only needs >=13.
+pyarrow==24.0.0
 fastparquet==2026.5.0
 appdirs==1.4.4
 requests==2.34.2
