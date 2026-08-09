@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from edge_engine.model.persistence import (
+from edge_engine.experiments.persistence import (
     compute_persistence_features,
     persistence_feature_columns,
 )

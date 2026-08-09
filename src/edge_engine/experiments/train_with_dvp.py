@@ -25,7 +25,7 @@ import xgboost as xgb
 
 from edge_engine.model.config import ModelConfig, load_model_config
 from edge_engine.model.features import feature_columns
-from edge_engine.model.opponent_defense import (
+from edge_engine.experiments.opponent_defense import (
     build_points_allowed_table,
     build_schedule_opponent_table,
     compute_dvp_feature,

@@ -27,7 +27,7 @@ import xgboost as xgb
 
 from edge_engine.model.config import ModelConfig, load_model_config
 from edge_engine.model.features import feature_columns
-from edge_engine.model.persistence import (
+from edge_engine.experiments.persistence import (
     PERSISTENCE_WINDOW,
     compute_persistence_features,
     persistence_feature_columns,

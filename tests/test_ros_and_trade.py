@@ -5,7 +5,7 @@ from edge_engine.draft.board import BoardPlayer
 from edge_engine.draft.server import ServerState, _value_bar, manual_pick
 from edge_engine.draft.tracker import DraftState
 from edge_engine.trade.compare import TradeComparison, compare_trade
-from edge_engine.trade.ros import build_ros_table, intervals_overlap, positional_prior, project
+from edge_engine.experiments.ros import build_ros_table, intervals_overlap, positional_prior, project
 
 
 def _row(player_id, week, points, position="RB", season=2025):

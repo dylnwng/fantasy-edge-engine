@@ -1,6 +1,6 @@
 import pandas as pd
 
-from edge_engine.model.opponent_defense import (
+from edge_engine.experiments.opponent_defense import (
     _unpivot_schedule,
     build_points_allowed_table,
     compute_dvp_feature,

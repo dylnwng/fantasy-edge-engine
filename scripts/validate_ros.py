@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from edge_engine.model.scoring import compute_points_for_seasons  # noqa: E402
 from edge_engine.paths import PLAYER_WEEK_PATH  # noqa: E402
 from edge_engine.roster.interface import get_default_source  # noqa: E402
-from edge_engine.trade.ros import build_ros_table, positional_prior, project  # noqa: E402
+from edge_engine.experiments.ros import build_ros_table, positional_prior, project  # noqa: E402
 
 ORIGINS = [4, 8, 12]
 N_BOOT = 2000

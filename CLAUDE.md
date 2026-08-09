@@ -26,10 +26,18 @@ Two separate capabilities:
 nflverse (play-by-play, snap counts, injuries, schedules)
    └─► ingestion/   → per-player-week usage table (Parquet, upserted on
         │              (season, week, player_id))
-        └─► model/  → XGBoost: trailing 2-game usage trend → next-week points
+        └─► model/  → TWO models, unioned at the prediction layer:
+        │              WR/RB/TE on receiving usage, QB on passing volume
              └─► ranking/  → free agents ranked, explained, roster-fit re-ranked
-                  └─► CLI table / Streamlit dashboard
+                  ├─► insights/   → roster diagnosis (Phase 3)
+                  ├─► trade/      → trade surfacer (Phase 4, no projection)
+                  ├─► draft/      → ADP board + draft-night screen (Phase 5-lite)
+                  └─► CLI + Streamlit dashboard (4 tabs)
 ```
+
+**`experiments/` is dead code on purpose.** Six modules that were built, measured and
+rejected. Nothing imports them. They're kept so nobody rebuilds a known dead end — read
+`experiments/__init__.py` before touching anything in there.
 
 Roster data goes through the `RosterStateSource` Protocol (`roster/interface.py`) with two
 implementations — manual CSV/YAML and a live cookie-authenticated ESPN connector. Nothing
@@ -58,15 +66,21 @@ instead of tracebacks.
 
 ## Measured performance
 
-| | Model | Naive baseline |
-|---|---|---|
-| 2025 **true holdout** MAE | 5.23 | 5.66 (7.5% better) |
-| Hit rate on flagged players, 1wk / 3wk | 68.8% / 80.1% | — |
+**Don't trust a number written in a doc — including this one. Run:**
 
-Matchup simulator: 63.9% pick accuracy, 0.220 Brier over 97 real 2024 matchups
-(no-skill baseline: 50% / 0.25).
+```bash
+python scripts/show_metrics.py
+```
 
-The edge is real, modest, and honestly measured. Don't inflate these numbers in docs.
+It reads `models/training_metrics*.json`, which the training scripts rewrite on every
+run, so it can't go stale. Hand-copied figures already drifted once: this file spent a
+while quoting a MAE that a retrain had superseded.
+
+As of the last run: main model 5.17 MAE vs a 5.66 baseline (8.7% better), 67.6% hit
+rate; QB model 6.57 vs 7.36 (10.8% better), 74.0% hit rate. Matchup simulator: 63.9%
+pick accuracy, 0.220 Brier over 97 real 2024 matchups (no-skill: 50% / 0.25).
+
+The edge is real, modest, and honestly measured. Don't inflate these numbers.
 
 ## Non-obvious things that will bite you
 

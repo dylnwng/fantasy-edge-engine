@@ -8,8 +8,11 @@ watches those instead, and ranks your league's free agents by predicted opportun
 rather than what already happened.
 
 It beats a naive "just look at recent points" baseline by a real, modest, honestly-measured
-margin — see [`EVALUATION.md`](EVALUATION.md) for the full writeup, including a mistake
+margin — see [`EVALUATION.md`](EVALUATION.md) for the full writeup, including the mistakes
 I made and caught along the way.
+
+The numbers below are a snapshot. For the live ones straight out of the trained models,
+run `python scripts/show_metrics.py` — docs drift, that file doesn't.
 
 | | Model | Naive baseline |
 |---|---|---|
@@ -83,7 +86,8 @@ One-time setup:
 python3 -m venv .venv && source .venv/bin/activate  # Python 3.11+
 bash scripts/install.sh          # nfl_data_py needs a two-step install, see the script
 python -m edge_engine.ingestion.pipeline --seasons 2018 2019 2020 2021 2022 2023 2024 2025
-python -m edge_engine.model.train
+python -m edge_engine.model.train        # WR / RB / TE
+python -m edge_engine.model.train_qb     # QB (separate feature space)
 ```
 
 `train` fits a static model artifact — it doesn't need to be re-run weekly. Only
@@ -139,8 +143,9 @@ past the handful of names actually worth a bid. `--all` (on either `weekly` or
 ```
 src/edge_engine/
   ingestion/     nflverse pull + normalize → per-player-week usage table
-  model/         features, XGBoost training/prediction, injury context, position-split
-                 comparison, historical accuracy tracking, per-player variance
+  model/         TWO models: WR/RB/TE on receiving usage (features/train/predict) and
+                 QB on passing volume (qb_features/train_qb/predict_qb), unioned at
+                 the prediction layer. Plus injury context and per-player variance.
   roster/        the roster-state interface + manual CSV and live ESPN implementations,
                  plus the ESPN-only matchup/opponent-data protocol
   ranking/       free-agent ranking, usage-trend explanations, roster-fit re-ranking
@@ -149,8 +154,9 @@ src/edge_engine/
   draft/         Phase 5-lite draft board — ADP pricing behind a MarketPriceSource
                  Protocol, tier cliffs, positional-run detection, live pick tracking,
                  ESPN draft polling, and a zero-dependency draft-night browser screen
-  trade/         Phase 4 trade surfacer — divergence + observed rates, no verdict.
-                 Also holds ros.py, a rest-of-season model that FAILED its kill gate
+  trade/         Phase 4 trade surfacer — divergence + observed rates, no verdict
+  experiments/   built, measured, REJECTED. Nothing imports these; kept so the next
+                 person doesn't rebuild a known dead end. See its __init__.py
   simulation/    Monte Carlo matchup simulation + brute-force FLEX optimizer (ESPN-only)
   weekly.py      single weekly entry point — refresh current-season data, run rankings
                  and (if live) the matchup simulator, with clear errors instead of tracebacks
