@@ -72,6 +72,11 @@ concept of one — there's no payoff to hand-maintaining an opponent's roster ev
 
 ## Quickstart
 
+> **Setting this up for a league that isn't mine?** Start with
+> [`SETUP.md`](SETUP.md) — it walks through the whole thing end to end, and
+> its §4 tells you up front whether your league is even compatible (ESPN
+> only, no auction drafts, and the model doesn't cover QB/K/DST).
+
 One-time setup:
 
 ```bash
