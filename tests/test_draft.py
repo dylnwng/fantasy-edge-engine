@@ -216,3 +216,23 @@ def test_empty_adp_file_raises_rather_than_yielding_an_empty_board(tmp_path):
 class _StubLookup:
     def resolve(self, name, position, team):
         return name, "matched", ""
+
+
+def test_two_players_sharing_a_name_are_removed_one_at_a_time():
+    # The NFL routinely has two active players with the same name, and
+    # ESPN's draft feed identifies picks BY NAME. A naive name-set filter
+    # deleted both from the pool the moment either was taken -- silently
+    # hiding an available player on draft night.
+    board = [_bp("Michael Thomas", adp=10.0), _bp("Michael Thomas", adp=80.0), _bp("Other", adp=20.0)]
+    state = DraftState(board=board)
+
+    after_one = state.apply(Pick(1, 1, "Michael Thomas")).available()
+    names_left = [(b.name, b.adp) for b in after_one]
+    # The earlier-ADP one is assumed taken; the later one survives.
+    assert ("Michael Thomas", 80.0) in names_left
+    assert ("Michael Thomas", 10.0) not in names_left
+
+    after_two = state.apply_all(
+        [Pick(1, 1, "Michael Thomas"), Pick(1, 2, "Michael Thomas")]
+    ).available()
+    assert [b.name for b in after_two] == ["Other"]

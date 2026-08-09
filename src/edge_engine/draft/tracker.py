@@ -67,8 +67,28 @@ class DraftState:
         return [self.picks[k] for k in sorted(self.picks)]
 
     def available(self) -> list[BoardPlayer]:
-        gone = self.drafted_names
-        return [b for b in self.board if b.name not in gone]
+        """Remove ONE board entry per pick, not every entry sharing that
+        name.
+
+        The NFL routinely has two active players with the same name
+        (multiple Michael Thomases, a QB and an LB both named Josh
+        Allen). ESPN's draft feed identifies picks by name, so a naive
+        name-set filter deleted both of them from the pool the moment
+        either was taken -- silently hiding an available player on
+        draft night, which is when you can least afford it.
+
+        When a name is ambiguous, the earlier-ADP player is the one
+        assumed taken first: that's overwhelmingly who a pick refers to,
+        and if both are genuinely drafted, both picks land and both come
+        off."""
+        taken = Counter(p.player_name for p in self.picks.values())
+        out: list[BoardPlayer] = []
+        for b in sorted(self.board, key=lambda x: x.adp):
+            if taken.get(b.name, 0) > 0:
+                taken[b.name] -= 1
+                continue
+            out.append(b)
+        return out
 
     def best_available(self, n: int = 3, position: str | None = None) -> list[BoardPlayer]:
         pool = self.available()
