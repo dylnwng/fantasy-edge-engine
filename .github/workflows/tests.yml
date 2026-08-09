@@ -1,0 +1,55 @@
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      # Don't cancel 3.13 just because 3.12 failed -- knowing whether a
+      # break is version-specific is most of the diagnosis.
+      fail-fast: false
+      matrix:
+        # 3.12 is the declared floor (numpy and xgboost both require it);
+        # 3.13 is the current release. Both are verified working.
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      # Deliberately the same script SETUP.md tells a new user to run, not a
+      # bespoke CI install. If the documented setup path breaks, this job
+      # goes red -- which is the point: requirements.txt was internally
+      # unsatisfiable (pyarrow==25 vs streamlit's pyarrow<25) and nothing
+      # caught it, because nothing ever ran the documented install.
+      - name: Install (the documented path)
+        run: bash scripts/install.sh
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      # The suite's stated contract is that it needs no network and no
+      # credentials -- it runs on synthetic data only. Enforce that rather
+      # than trusting it: two tests had silently started reaching nflverse
+      # for the live season's schedule and passed only on machines with a
+      # warm cache. Pointing the proxy vars at a dead port makes any real
+      # outbound call fail fast.
+      - name: Run tests with no network (enforces the no-network contract)
+        env:
+          HTTP_PROXY: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          http_proxy: http://127.0.0.1:9
+          https_proxy: http://127.0.0.1:9
+          NO_PROXY: ""
+          no_proxy: ""
+        run: python -m pytest -q
