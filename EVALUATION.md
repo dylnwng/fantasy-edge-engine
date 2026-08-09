@@ -495,6 +495,45 @@ This is the fourth accuracy experiment in this document to be tried and rejected
 un-promoted. That is not a run of bad luck — it is what an honest gate does to plausible
 ideas at this data volume.
 
+## The QB scope gap was wrong, and a probe proved it
+
+The "Known scope gap: QBs aren't covered" section above is accurate about the
+*mechanism* — `target_share` and `air_yards_share` are structurally null for
+quarterbacks, so the null-drop in `features.py` removes them — but the conclusion
+drawn from it was too strong. The reasoning went: QB snap share is effectively
+binary (78% of QB weeks are >80% snaps, and the median week-over-week move is
+**0.0 points**, versus 9–10 points for WR/RB/TE), therefore there is no usage
+signal to detect at the position.
+
+That conflates "snap share doesn't vary" with "no usage varies." Quarterbacks are
+tracked for attempts, pass share, team pass volume and rush attempts — all of
+which move week to week, and none of which are snap share.
+
+`scripts/qb_signal_probe.py` builds those QB-appropriate volume features and runs
+the project's standard test: beat a trailing-points baseline on a held-out season,
+with a paired bootstrap, replicated across two independent seasons.
+
+| Validation season | n | Volume model MAE | Trailing-points MAE | Gain (90% CI) | Resamples favouring |
+|---|---|---|---|---|---|
+| 2024 | 399 | 6.30 | 7.04 | **+0.73 [+0.42, +1.04]** | 100% |
+| 2025 | 389 | 6.42 | 7.31 | **+0.89 [+0.57, +1.23]** | 100% |
+
+Roughly a 10–12% MAE improvement, with confidence intervals nowhere near zero on
+either season. Feature importances show it isn't just re-deriving the baseline:
+`trail_points` leads at 0.185, but `pass_share`, `team_attempts` and
+`rush_attempts` together carry substantially more.
+
+**This is the first experiment in this document to clear the bar.** DvP was
+rejected. Usage-persistence looked promising on one season and reversed sign on
+the next. The `flag_margin` sweep flattened on fresh data. The rest-of-season
+model tied its baseline. QB volume replicates cleanly on both.
+
+The lesson is not that the earlier rejections were wrong — that discipline caught
+three ideas that would have made the tool worse. It is that a scope boundary
+inherited as an assumption deserves the same test as a new feature. This one was
+carried for the whole project on an argument that sounded mechanical and was never
+actually measured.
+
 ## Bottom line
 
 The model beats a naive rolling-average baseline by a real but modest margin (~10% MAE
