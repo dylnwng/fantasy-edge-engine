@@ -38,7 +38,7 @@ Check it worked:
 python -m pytest -q
 ```
 
-You should see ~221 tests pass. They use synthetic data only — no network,
+You should see ~235 tests pass. They use synthetic data only — no network,
 no credentials.
 
 ---
@@ -48,6 +48,7 @@ no credentials.
 ```bash
 python -m edge_engine.ingestion.pipeline --seasons 2018 2019 2020 2021 2022 2023 2024 2025
 python -m edge_engine.model.train
+python -m edge_engine.model.train_qb     # quarterbacks (separate model, see §4)
 ```
 
 **Expect the first command to take several minutes** — it's pulling every
@@ -144,12 +145,23 @@ Be honest with yourself here before spending the time.
 | Auction draft | ❌ Not supported |
 | Keeper / dynasty | ❌ No keeper valuation |
 
-**The biggest surprise for new users:** the opportunity model covers
-**WR, RB and TE only.** It does not rank quarterbacks, kickers or defenses.
-That's not an oversight — the model's inputs are receiving/rushing usage
-metrics (target share, air yards share), which are structurally undefined
-for a QB. Adding real QB support is a separate modeling project. If you were
-hoping for QB waiver rankings, this won't give you them.
+**Positions covered: QB, RB, WR, TE.** Kickers and defenses are **not**
+ranked — nflverse carries essentially no player-level usage data for them,
+so there's nothing to model.
+
+Quarterbacks are covered by a **separate model** with its own features
+(pass attempts, share of team pass volume, rush attempts) because the main
+model's receiving metrics are structurally undefined for a passer. It's
+validated the same way and on two independent seasons beat a
+trailing-points baseline by ~10–12% MAE with the confidence interval clear
+of zero. It needs its own training step:
+
+```bash
+python -m edge_engine.model.train_qb
+```
+
+Skip that and everything still works — QBs are simply absent from the
+rankings, exactly as before they were supported.
 
 **What the edge actually is:** roughly 10% better next-week point error than
 "just look at recent points," and a 68–80% hit rate on the players it flags,

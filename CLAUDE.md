@@ -1,7 +1,7 @@
 # Edge Engine — orientation for a new agent
 
 Fantasy football waiver-wire tool for one specific private ESPN league. Python 3.11+,
-161 tests, no network calls or credentials required to run the suite.
+235 tests, no network calls or credentials required to run the suite.
 
 ```bash
 source .venv/bin/activate && python -m pytest tests/ -q
@@ -44,6 +44,7 @@ python -m edge_engine.insights [--week N] [--all]         # roster diagnosis (Ph
 python -m edge_engine.ranking.roster_fit [--top N|--all]  # rankings only
 python -m edge_engine.simulation.matchup_cli [--week N]   # matchup + FLEX optimizer
 python -m edge_engine.model.train                         # occasional, NOT weekly
+python -m edge_engine.model.train_qb                      # the separate QB model
 streamlit run app.py
 ```
 
@@ -76,8 +77,16 @@ raw plays, gated on reproducing 2024 where both sources exist (0.9989 correlatio
 fantasy points, exactly 1.0000 on air-yards share). **Call
 `fetch_weekly_data_or_reconstruct()`, not `fetch_weekly_data()`.**
 
+**QBs use a SECOND model.** `model/qb_features.py` + `train_qb.py` + `predict_qb.py`.
+Its features are volume (attempts, pass share, rush attempts), not receiving usage, and
+its rows are unioned into `score_as_of_week`'s output with an identical column contract
+— downstream code is unaware two models exist. Snap share is deliberately excluded (it's
+~binary for QBs). If `models/qb_model.json` is absent this is a silent no-op. QBs carry
+their own `usage_explanation`, because `usage_trend_explanation` reads receiving metrics
+that are null for a passer.
+
 **This project rejects marginal improvements on principle, and that has been empirically
-vindicated.** Four accuracy experiments run, three rejected:
+vindicated.** Five accuracy experiments run, three rejected, one un-promoted, one shipped:
 
 - Opponent-adjusted (DvP) projections — hit rate got *worse*. Rejected.
 - Gamma distribution + measured team correlation (r=0.0405, measured not guessed) — a
@@ -86,6 +95,10 @@ vindicated.** Four accuracy experiments run, three rejected:
   resamples favoring). Not adopted, because the 90% CI crossed zero. It then **reversed
   sign on 2025** (−1.4pp, 20% favoring). Do not resurrect without a far larger sample.
 - `flag_margin` sweep — the 2024 precision curve flattened on 2025. Left at 3.0.
+- **QB volume features — SHIPPED.** The only experiment to replicate: +0.73 [+0.42,
+  +1.04] on 2024 and +0.89 [+0.57, +1.23] on 2025, 100% of resamples both times. Note
+  the lesson: this scope boundary had been *assumed* for the whole project on an
+  argument that sounded mechanical and was never measured.
 
 The convergent finding: at ~300–450 flagged players per season, single-season results
 reliably manufacture 2–6pp "improvements" that vanish or invert on the next season.
@@ -149,7 +162,7 @@ not built** for the same reason.
 ## Explicit scope boundaries (PRD non-goals — don't "helpfully" add these)
 
 No FAAB dollar amounts (confidence tiers only) · no trade scanner or opponent-roster
-mining · no non-ESPN platforms · no QBs in the opportunity model · no news scraping or
+mining · no non-ESPN platforms · no kickers or defenses (no usage data exists) · no news scraping or
 sentiment analysis · no start/sit logic inside roster-fit (that's Phase 2's job).
 
 ## Read before making changes

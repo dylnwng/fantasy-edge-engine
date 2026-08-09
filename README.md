@@ -75,7 +75,7 @@ concept of one — there's no payoff to hand-maintaining an opponent's roster ev
 > **Setting this up for a league that isn't mine?** Start with
 > [`SETUP.md`](SETUP.md) — it walks through the whole thing end to end, and
 > its §4 tells you up front whether your league is even compatible (ESPN
-> only, no auction drafts, and the model doesn't cover QB/K/DST).
+> only, no auction drafts, and the model doesn't cover kickers or defenses).
 
 One-time setup:
 
@@ -172,8 +172,11 @@ scoped narrowly on purpose too: it only considers your FLEX slot(s) against your
 opponent, via straightforward brute-force enumeration rather than a general-purpose
 solver — the real decision space (a handful of bench players) doesn't need one, and
 adding one would be complexity without a corresponding benefit. It also doesn't cover
-quarterbacks in the opportunity model — see `EVALUATION.md` for why that's a real, stated
-scope boundary rather than an oversight.
+kickers or defenses — nflverse has essentially no player-level usage data for those
+positions, so there is nothing to model. Quarterbacks *are* covered, by a separate
+volume-based model (`model/qb_features.py`); `EVALUATION.md` documents how a scope
+boundary that had been assumed for most of this project turned out to be wrong when
+it was finally measured.
 
 ## Tests
 
@@ -181,4 +184,4 @@ scope boundary rather than an oversight.
 pytest
 ```
 
-221 tests, no live network calls or credentials required.
+235 tests, no live network calls or credentials required.

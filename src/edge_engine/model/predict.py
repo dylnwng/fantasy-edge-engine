@@ -118,6 +118,19 @@ def score_as_of_week(season: int, target_week: int, config: ModelConfig | None =
     roster_statuses = get_flagged_roster_statuses()
     latest["roster_status_note"] = [roster_status_note(row.player_id, roster_statuses) for row in latest.itertuples()]
 
+    # Quarterbacks come from a SEPARATE model with its own feature space
+    # (volume, not receiving usage) and are unioned in here rather than
+    # merged upstream -- the WR/RB/TE pipeline above is validated and must
+    # not be perturbed by a position it was never built for. QB rows carry
+    # the identical column contract, so everything downstream is unaware
+    # two models exist. Absent a trained QB artifact this is a no-op and
+    # the tool behaves exactly as it did before QBs were covered.
+    from edge_engine.model.predict_qb import score_qbs_as_of_week
+
+    qbs = score_qbs_as_of_week(season, target_week, config, player_week=player_week)
+    if not qbs.empty:
+        latest = pd.concat([latest, qbs], ignore_index=True)
+
     return latest.sort_values("predicted_score", ascending=False).reset_index(drop=True)
 
 

@@ -52,7 +52,16 @@ def confidence_tier(predicted_score: float, baseline_score: float, flag_margin: 
 
 
 def _explanation_for(player_week: pd.DataFrame, row: pd.Series, window: int) -> str:
-    trend = usage_trend_explanation(player_week, row.player_id, int(row.season), int(row.week), window)
+    # Quarterbacks arrive from a separate model and carry their own
+    # volume-based explanation. usage_trend_explanation reads snap and
+    # target share, which are structurally null for a passer -- it would
+    # report "usage steady, no metric moved meaningfully" for every QB
+    # regardless of what his workload actually did.
+    qb_explanation = getattr(row, "usage_explanation", None)
+    if qb_explanation is not None and pd.notna(qb_explanation) and str(qb_explanation).strip():
+        trend = str(qb_explanation)
+    else:
+        trend = usage_trend_explanation(player_week, row.player_id, int(row.season), int(row.week), window)
     if row.has_injury_context:
         trend = f"{trend}. {row.injury_explanation}"
     # roster_status_note is None for the common case, but pandas coerces
