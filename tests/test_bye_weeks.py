@@ -1,4 +1,7 @@
+import logging
+
 import pandas as pd
+import pytest
 
 from edge_engine.roster import bye_weeks, nflverse_ref
 
@@ -70,3 +73,41 @@ def test_a_schedule_correction_is_picked_up_on_the_next_call(monkeypatch):
     monkeypatch.setattr(nflverse_ref, "fetch_schedules", lambda season, force_refresh=False: _sched(corrected_rows))
     second = bye_weeks.get_bye_weeks(2024)
     assert second["AAA"] == 10
+
+
+def test_unfetchable_schedule_degrades_to_no_byes_instead_of_crashing(monkeypatch, caplog):
+    # The schedule fetch can fail for reasons unrelated to this code --
+    # nflverse or habitatring.com down or rate-limiting, no connectivity,
+    # a season not yet published -- and cached_fetch surfaces all of them
+    # as RuntimeError. That's the same "we don't know the byes" state as
+    # the incomplete-schedule case above and must degrade the same way:
+    # it used to propagate and take the whole Streamlit dashboard down
+    # with a raw traceback, and blocked every roster read in both roster
+    # sources, over context that never moves predicted_score.
+    def _raise(season, force_refresh=False):
+        raise RuntimeError(
+            f"Could not fetch 'schedules_{season}' from nflverse: HTTP Error 403: Forbidden."
+        )
+
+    monkeypatch.setattr(nflverse_ref, "fetch_schedules", _raise)
+
+    with caplog.at_level(logging.WARNING):
+        byes = bye_weeks.get_bye_weeks(2026)
+
+    assert byes == {}
+    # Reported, never silent -- same discipline as weekly.py's handling
+    # of the same external blocker.
+    assert "2026" in caplog.text
+    assert "bye" in caplog.text.lower()
+
+
+def test_a_genuine_parsing_bug_is_not_swallowed_by_the_fetch_guard(monkeypatch):
+    # The guard is scoped to RuntimeError (what cached_fetch raises for a
+    # fetch failure) specifically so a real bug below it still surfaces.
+    monkeypatch.setattr(
+        nflverse_ref, "fetch_schedules",
+        lambda season, force_refresh=False: _sched([]).drop(columns=["game_type"]),
+    )
+
+    with pytest.raises(KeyError):
+        bye_weeks.get_bye_weeks(2024)
