@@ -112,6 +112,8 @@ them:
 ```bash
 python -m edge_engine.draft                             # draft board, priced at ADP (Phase 5-lite)
 python -m edge_engine.draft --live                      # live pick tracker + tier cliffs
+python -m edge_engine.draft --serve [--espn]            # draft-night browser screen
+python -m edge_engine.trade --out "A" --in "B"          # trade surfacer (no verdict)
 python -m edge_engine.insights                          # what's wrong with my roster (Phase 3)
 python -m edge_engine.insights --week 12 --all          # a past week, neutral players listed
 python -m edge_engine.ranking.roster_fit                # free-agent rankings only
@@ -140,7 +142,10 @@ src/edge_engine/
   insights/      Phase 3 roster diagnosis — usage-vs-production divergence, bye-adjusted
                  worst-week scarcity, bye/stacking/injury exposure
   draft/         Phase 5-lite draft board — ADP pricing behind a MarketPriceSource
-                 Protocol, tier cliffs, positional-run detection, live pick tracking
+                 Protocol, tier cliffs, positional-run detection, live pick tracking,
+                 ESPN draft polling, and a zero-dependency draft-night browser screen
+  trade/         Phase 4 trade surfacer — divergence + observed rates, no verdict.
+                 Also holds ros.py, a rest-of-season model that FAILED its kill gate
   simulation/    Monte Carlo matchup simulation + brute-force FLEX optimizer (ESPN-only)
   weekly.py      single weekly entry point — refresh current-season data, run rankings
                  and (if live) the matchup simulator, with clear errors instead of tracebacks
@@ -171,4 +176,4 @@ scope boundary rather than an oversight.
 pytest
 ```
 
-204 tests, no live network calls or credentials required.
+220 tests, no live network calls or credentials required.

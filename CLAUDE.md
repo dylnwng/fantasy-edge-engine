@@ -132,6 +132,20 @@ season's points). It exists so the board runs out of the box; replace it with a 
 export before trusting anything. Live ESPN draft sync (§4.4) is unbuilt — it needs the
 `mDraftDetail` spike against a mock draft first.
 
+## Phase 4 (`trade/`) — the ROS model failed its gate
+
+`trade/ros.py` is a **rejected experiment**. It beats replacement level massively and
+beats season-to-date PPG essentially not at all (every 2024 bootstrap CI crosses zero; a
+dead tie at week 12; rank correlation *worse* than the baseline at week 4). Mechanically:
+the shrinkage is the model, so it helps while a sample is thin and adds noise once that
+sample is the best estimate.
+
+Per PRD §2.5/§3.7 that means **Phase 4 ships as a pure surfacer** — `trade/compare.py`
+shows divergence and observed rates, with no ROS number, no verdict, no fairness score.
+Re-run `scripts/validate_ros.py` before ever wiring `ros.py` into anything; it is kept
+only so nobody rebuilds it from scratch. **Phase 5-full (custom draft projections) is
+not built** for the same reason.
+
 ## Explicit scope boundaries (PRD non-goals — don't "helpfully" add these)
 
 No FAAB dollar amounts (confidence tiers only) · no trade scanner or opponent-roster

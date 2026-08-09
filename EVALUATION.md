@@ -445,6 +445,56 @@ survived a genuine holdout — but it is a hard ceiling on how much further feat
 can honestly claim to push it. The remaining levers are structural (seeing usage before
 box scores do, and acting on it Tuesday), not algorithmic.
 
+## Rejected experiment #4: the rest-of-season model
+
+Phase 4 (trade insights) and Phase 5-full (custom draft projections) both depend on a
+rest-of-season estimator — "how many points per game will this player average from here
+to week 17." Neither ships, because that estimator failed its kill gate.
+
+**What was built** (`trade/ros.py`): a genuinely separate model from the weekly one, as
+the PRD insists. Different target (mean PPG over the remaining season), different features
+(season-to-date usage *rate*, not trend — over a ten-week horizon "what is this player's
+established role" should beat "what changed last week"), and explicit shrinkage toward the
+positional replacement baseline with weight `g/(g+k)`, so a week-2 projection is mostly
+prior and a week-12 projection is mostly observed.
+
+**Validation** (`scripts/validate_ros.py`, the PRD's §2.4 protocol): origins at weeks 4, 8
+and 12 reported separately, against two baselines, on both 2024 and 2025, with a paired
+bootstrap on the MAE difference.
+
+| | vs. positional prior | vs. season-to-date PPG |
+|---|---|---|
+| 2024 wk 4 | +1.03 [+0.84, +1.22] · 100% | +0.10 [−0.14, +0.34] · 74% |
+| 2024 wk 8 | +1.39 [+1.18, +1.61] · 100% | +0.05 [−0.11, +0.23] · 68% |
+| 2024 wk 12 | +1.39 [+1.13, +1.65] · 100% | **−0.00** [−0.16, +0.17] · 48% |
+| 2025 wk 4 | +1.01 [+0.81, +1.20] · 100% | +0.19 [−0.02, +0.41] · 93% |
+| 2025 wk 8 | +1.13 [+0.90, +1.36] · 100% | +0.16 [−0.03, +0.34] · 92% |
+| 2025 wk 12 | +1.19 [+0.92, +1.45] · 100% | +0.16 [+0.00, +0.32] · 96% |
+
+It demolishes the positional prior — but that baseline is replacement level, and beating
+it is table stakes for anything that looks at a player at all. Against the baseline that
+matters, **season-to-date PPG, it does essentially nothing**: every 2024 interval crosses
+zero, and at week 12 it is a dead tie. Rank correlation tells the same story (model 0.706
+vs baseline 0.726 at week 4 — the baseline *ranks better*), and ranking is exactly what
+trade and draft need.
+
+**Why, mechanically:** the shrinkage *is* the model. It helps while a player's own sample
+is too thin to trust, and once that sample is the best available estimate it is just
+adding noise toward a league median. The weekly model's edge comes from detecting recent
+change; averaging that away is the right call for a long horizon, but what's left is a
+season average with extra steps.
+
+**Consequence, per §2.5 and §3.7:** Phase 4 ships as a **pure surfacer** —
+`trade/compare.py` shows usage-vs-production divergence and observed rates side by side,
+with no ROS number anywhere and no verdict, fairness score, or winner label. Phase 5-full
+is not built at all; the draft board prices at ADP. `ros.py` is kept rather than deleted,
+carrying its failure in the module docstring, for the same reason the DvP and persistence
+experiments are kept: a documented rejection stops the next person rebuilding it.
+
+This is the fourth accuracy experiment in this document to be tried and rejected or left
+un-promoted. That is not a run of bad luck — it is what an honest gate does to plausible
+ideas at this data volume.
+
 ## Bottom line
 
 The model beats a naive rolling-average baseline by a real but modest margin (~10% MAE

@@ -122,6 +122,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--position", default=None, help="filter to one position")
     parser.add_argument("--season", type=int, default=None, help="season to read late usage from")
     parser.add_argument("--live", action="store_true", help="interactive pick tracker")
+    parser.add_argument("--serve", action="store_true", help="draft-night browser screen")
+    parser.add_argument("--espn", action="store_true", help="with --serve: poll ESPN's draft detail")
+    parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args(argv)
 
     source = ManualMarketPriceSource()
@@ -141,6 +144,24 @@ def main(argv: list[str] | None = None) -> None:
         board = [b for b in board if b.position == args.position.upper()]
 
     provenance = f"{source.describe()}, late usage from {season}"
+
+    if args.serve:
+        from edge_engine.draft.server import ServerState, serve
+
+        league_config = get_default_source().get_league_config()
+        pick_source = None
+        if args.espn:
+            from edge_engine.draft.live import EspnDraftPickSource
+
+            pick_source = EspnDraftPickSource()
+            print(f"Polling {pick_source.describe()}")
+        state = ServerState(
+            draft=DraftState(board=board),
+            lineup_slots=league_config.lineup_slots,
+            pick_source=pick_source,
+        )
+        serve(state, port=args.port)
+        return
 
     if not args.live:
         print(render_board(board, gaps, args.limit, provenance))
