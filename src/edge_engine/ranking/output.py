@@ -21,7 +21,7 @@ from edge_engine.model.predict import score_latest_week
 from edge_engine.paths import PLAYER_WEEK_PATH
 from edge_engine.ranking.usage_trend import usage_trend_explanation
 from edge_engine.roster.interface import get_default_source
-from edge_engine.roster.models import Player
+from edge_engine.roster.models import LeagueConfig, Player
 
 ConfidenceTier = str  # "High" | "Medium" | "Low"
 
@@ -62,15 +62,53 @@ def _explanation_for(player_week: pd.DataFrame, row: pd.Series, window: int) -> 
         trend = str(qb_explanation)
     else:
         trend = usage_trend_explanation(player_week, row.player_id, int(row.season), int(row.week), window)
+
+    parts = [trend]
     if row.has_injury_context:
-        trend = f"{trend}. {row.injury_explanation}"
+        parts.append(row.injury_explanation)
     # roster_status_note is None for the common case, but pandas coerces
     # a mostly-None object column to NaN on assignment (see predict.py) --
     # NaN is truthy in Python, so a plain `if row.roster_status_note`
     # check would append the literal string "nan" to every explanation.
     if pd.notna(row.roster_status_note):
-        trend = f"{trend}. {row.roster_status_note}"
-    return trend
+        parts.append(row.roster_status_note)
+    return _join_sentences(parts)
+
+
+def _join_sentences(parts: list[str]) -> str:
+    """Join explanation fragments into readable prose.
+
+    Some fragments already end in a full stop and some don't, so naively
+    joining with ". " produced doubled periods in the UI ("...show a
+    trend.. Usage spike coincides..."). Normalise each fragment's ending
+    before joining rather than leaving the caller to guess."""
+    cleaned = [p.strip().rstrip(".") for p in parts if p and str(p).strip()]
+    return ". ".join(cleaned) + "." if cleaned else ""
+
+
+_FLEX_ELIGIBLE = {"RB", "WR", "TE"}
+_NON_STARTING_SLOTS = {"BENCH", "IR", "FLEX"}
+
+
+def _startable_positions(league_config: LeagueConfig) -> set[str]:
+    """Positions this league actually starts.
+
+    A player's nflverse position can legitimately differ from the one his
+    fantasy platform lists: Bo Melton is carried as a WR by ESPN (so he's
+    in the free-agent pool) but nflverse correctly has him as a DB after
+    Green Bay converted him to cornerback. Without this filter he shows up
+    as a defensive back in a standard league's waiver recommendations,
+    which reads as a bug even though the data is right.
+
+    Derived from the league's own lineup slots rather than hardcoded, so
+    an IDP league that genuinely starts defensive backs keeps them."""
+    positions = {
+        slot for slot, count in league_config.lineup_slots.items()
+        if count > 0 and slot.upper() not in _NON_STARTING_SLOTS
+    }
+    if league_config.lineup_slots.get("FLEX", 0) > 0:
+        positions |= _FLEX_ELIGIBLE
+    return positions
 
 
 def build_free_agent_rankings(config: ModelConfig | None = None) -> tuple[list[RankedFreeAgent], list[Player]]:
@@ -88,6 +126,7 @@ def build_free_agent_rankings(config: ModelConfig | None = None) -> tuple[list[R
     player_week = pd.read_parquet(PLAYER_WEEK_PATH)
 
     pool = scored[scored["player_id"].isin(resolved.keys())].copy()
+    pool = pool[pool["position"].isin(_startable_positions(source.get_league_config()))]
 
     candidates = []
     for row in pool.itertuples():

@@ -172,3 +172,37 @@ def test_no_actionable_candidates_still_reports_how_many_were_hidden():
 
     assert visible == []
     assert omitted == 2
+
+
+def test_startable_positions_excludes_positions_the_league_never_starts():
+    # Bo Melton is carried as a WR by ESPN (so he lands in the free-agent
+    # pool) but nflverse has him as a DB after Green Bay converted him to
+    # cornerback. Without this filter a defensive back appears in a
+    # standard league's waiver recommendations, which reads as a bug.
+    from edge_engine.ranking.output import _startable_positions
+
+    standard = _league_config(lineup_slots={"QB": 1, "RB": 2, "WR": 2, "TE": 1,
+                                            "FLEX": 1, "K": 1, "DST": 1, "BENCH": 6})
+    positions = _startable_positions(standard)
+
+    assert "DB" not in positions and "LB" not in positions
+    assert {"QB", "RB", "WR", "TE", "K", "DST"} <= positions
+    assert "BENCH" not in positions and "FLEX" not in positions
+
+
+def test_startable_positions_keeps_defensive_positions_for_an_idp_league():
+    # Derived from the league's own slots, not hardcoded, so a league that
+    # genuinely starts defensive backs keeps them.
+    from edge_engine.ranking.output import _startable_positions
+
+    idp = _league_config(lineup_slots={"QB": 1, "RB": 2, "WR": 2, "DB": 2, "LB": 2, "BENCH": 6})
+    positions = _startable_positions(idp)
+
+    assert "DB" in positions and "LB" in positions
+
+
+def test_flex_slot_pulls_in_flex_eligible_positions():
+    from edge_engine.ranking.output import _startable_positions
+
+    only_flex = _league_config(lineup_slots={"QB": 1, "FLEX": 1, "BENCH": 6})
+    assert {"RB", "WR", "TE"} <= _startable_positions(only_flex)
