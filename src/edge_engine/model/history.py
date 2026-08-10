@@ -28,6 +28,7 @@ import xgboost as xgb
 
 from edge_engine.model.config import ModelConfig, load_model_config
 from edge_engine.model.features import build_features, feature_columns
+from edge_engine.model.labels import forward_window_label
 from edge_engine.model.scoring import compute_points_for_seasons
 from edge_engine.model.train import MODEL_PATH, _ensure_seasons_ingested
 from edge_engine.roster.interface import get_default_source
@@ -93,19 +94,24 @@ def _load_model() -> xgb.XGBRegressor:
 
 
 def _attach_following_performance(flagged: pd.DataFrame, points_table: pd.DataFrame, window: int) -> pd.DataFrame:
-    pts = points_table.sort_values(["player_id", "season", "week"]).copy()
-    grouped = pts.groupby(["player_id", "season"])["points"]
-    shifted_cols = []
-    for offset in range(1, window + 1):
-        col = f"_pts_next_{offset}"
-        pts[col] = grouped.shift(-offset)
-        shifted_cols.append(col)
+    """Delegates to labels.forward_window_label rather than reimplementing
+    the same shift/groupby windowing a second time. Before this, history.py
+    and labels.py each had their own independent copy of identical logic --
+    labels.py's own docstring claimed the two computed "the same quantity",
+    which was true only by coincidence: nothing enforced it, and an edit to
+    one window (a season-boundary fix, say) would have silently left the
+    other behind with no test catching the drift.
 
-    pts["following_games_played"] = pts[shifted_cols].notna().sum(axis=1)
-    pts["following_avg_points"] = pts[shifted_cols].mean(axis=1)
-
+    require_full_window=False: history.py grades a flag on however many
+    following games actually exist (track_flagged_players below drops only
+    the zero-game case), unlike training, which needs a full window so
+    every label is the same quantity."""
+    window_stats = forward_window_label(points_table, horizon=window, require_full_window=False)
+    window_stats = window_stats.rename(
+        columns={"label_forward_points": "following_avg_points", "forward_games": "following_games_played"}
+    )
     return flagged.merge(
-        pts[["season", "week", "player_id", "following_games_played", "following_avg_points"]],
+        window_stats[["season", "week", "player_id", "following_games_played", "following_avg_points"]],
         on=["season", "week", "player_id"],
         how="left",
     )

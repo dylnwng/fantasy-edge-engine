@@ -376,12 +376,13 @@ def _print_report(report: dict) -> None:
             f"{f['mae_improvement']:>+9.3f}{f['n_flagged']:>9}{hit:>10}"
         )
     print("-" * len(header))
+    mean_hit = f"{report['mean_hit_rate']:.1%}" if report["mean_hit_rate"] is not None else "n/a"
     print(
         f"{'Pooled':<8}{report['pooled_model_mae']:>9.3f}"
         f"{report['pooled_baseline_mae']:>10.3f}"
         f"{report['pooled_baseline_mae'] - report['pooled_model_mae']:>+9.3f}"
         f"{report['total_flagged']:>9}"
-        f"{(f'{report['mean_hit_rate']:.1%}' if report['mean_hit_rate'] is not None else 'n/a'):>10}"
+        f"{mean_hit:>10}"
     )
 
     boot = report["pooled_bootstrap"]
