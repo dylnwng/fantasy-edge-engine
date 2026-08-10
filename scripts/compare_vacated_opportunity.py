@@ -123,6 +123,12 @@ def _print_comparison(report_a: dict, report_b: dict, n_fired: int, n_rows: int)
         print("MAE improves but the hit rate does NOT follow. That is the exact pattern that")
         print("sank opponent adjustment: the flagged list is what people act on, so a better")
         print("average with a worse short list is a downgrade. Do not adopt on MAE alone.")
+    elif hit_compared and hit_b_better > hit_compared / 2:
+        print("Hit rate replicates but MAE does not. That is the sub-population that matters")
+        print("most -- the flagged list is the product, not the average error -- but it is")
+        print("also by far the smallest sample here (a few hundred players a season), which")
+        print("is exactly the size that manufactures effects. Suggestive, not a result:")
+        print("re-run before acting, and do not adopt on this alone.")
     else:
         print("Does NOT replicate across seasons. On this project's own standard that is a")
         print("rejection, and the existing invariant stands -- injury context stays text.")

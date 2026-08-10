@@ -1,7 +1,7 @@
 # Edge Engine — orientation for a new agent
 
 Fantasy football waiver-wire tool for one specific private ESPN league. Python 3.12+,
-421 tests, no network calls or credentials required to run the suite.
+440 tests, no network calls or credentials required to run the suite.
 
 ```bash
 source .venv/bin/activate && python -m pytest tests/ -q
@@ -141,8 +141,11 @@ The convergent finding: at ~300–450 flagged players per season, single-season 
 reliably manufacture 2–6pp "improvements" that vanish or invert on the next season.
 **Treat any feature that only looks good on one season as noise until proven otherwise.**
 
-**Three experiments are built but NOT yet measured.** Each prints a verdict and changes
-nothing; adopting any of them is a separate, deliberate edit.
+**Four experiments are built but NOT yet measured.** Each prints a verdict and changes
+nothing; adopting any of them is a separate, deliberate edit. All four run through
+`run_walk_forward` and are judged on fold agreement, and all four report hit rate beside
+MAE — a feature can improve average error while degrading the short flagged list, which
+is how opponent adjustment was caught.
 
 **Team volume** (`model/team_volume.py` + `scripts/compare_team_volume.py`) — every
 shipped feature is a *share*, so the model can't tell a 25% target share on a 70-play
@@ -161,7 +164,37 @@ replicated when finally tested. The script watches hit rate as closely as MAE �
 firing only on injured-backup rows could improve average error while degrading the short
 flagged list, which is what people actually act on.
 
-**The 3-week label horizon** (`model/labels.py` + `scripts/compare_label_horizon.py`). The shipped model predicts next
+**The 3-week label horizon** (`model/labels.
+
+**Depth of target** (`model/target_depth.py` + `scripts/compare_target_depth.py`) — aDOT
+distinguishes a checkdown back from a field stretcher at the same air-yards share. The
+most incremental of the four, and adjacent to an existing signal, which is exactly where
+the previous rejections cluster — expect it to fail. Note trailing aDOT is a RATIO OF
+SUMS, not a mean of weekly ratios: the latter weights a one-target week as heavily as a
+ten-target week, so it is computed in that module rather than trailed by
+`build_features`. Undefined (no targets in the window) stays null rather than 0.0, so the
+comparison runs on players who were actually thrown to and prints how much of the pool
+that is.py` + `scripts/compare_label_horizon.
+
+**Depth of target** (`model/target_depth.py` + `scripts/compare_target_depth.py`) — aDOT
+distinguishes a checkdown back from a field stretcher at the same air-yards share. The
+most incremental of the four, and adjacent to an existing signal, which is exactly where
+the previous rejections cluster — expect it to fail. Note trailing aDOT is a RATIO OF
+SUMS, not a mean of weekly ratios: the latter weights a one-target week as heavily as a
+ten-target week, so it is computed in that module rather than trailed by
+`build_features`. Undefined (no targets in the window) stays null rather than 0.0, so the
+comparison runs on players who were actually thrown to and prints how much of the pool
+that is.py`).
+
+**Depth of target** (`model/target_depth.py` + `scripts/compare_target_depth.py`) — aDOT
+distinguishes a checkdown back from a field stretcher at the same air-yards share. The
+most incremental of the four, and adjacent to an existing signal, which is exactly where
+the previous rejections cluster — expect it to fail. Note trailing aDOT is a RATIO OF
+SUMS, not a mean of weekly ratios: the latter weights a one-target week as heavily as a
+ten-target week, so it is computed in that module rather than trailed by
+`build_features`. Undefined (no targets in the window) stays null rather than 0.0, so the
+comparison runs on players who were actually thrown to and prints how much of the pool
+that is. The shipped model predicts next
 week; a waiver claim is a multi-week commitment. The script trains one model per label and
 scores **both against the same 3-week target on the same rows** — comparing each model
 against its own label is invalid, since a 3-game average is mechanically smoother and

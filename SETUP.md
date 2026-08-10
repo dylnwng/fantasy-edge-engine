@@ -38,7 +38,7 @@ Check it worked:
 python -m pytest -q
 ```
 
-You should see ~421 tests pass. They use synthetic data only — no network,
+You should see ~440 tests pass. They use synthetic data only — no network,
 no credentials.
 
 ---
