@@ -1,10 +1,17 @@
 name: tests
 
 on:
+  # Scoped to main on purpose. `push: ["**"]` alongside `pull_request` ran
+  # the whole matrix TWICE for every push to a branch with an open PR --
+  # once for each trigger, identical work. Branch commits are covered by
+  # the pull_request run; this leaves push to cover main itself, including
+  # merge commits, which no PR event fires for.
+  #
+  # Tradeoff, stated: a branch with no open PR now gets no CI until one is
+  # opened. That's the usual shape and the cost is a run you didn't need.
   push:
-    branches: ["**"]
-  pull_request:
     branches: [main]
+  pull_request:
 
 jobs:
   test:
@@ -19,9 +26,14 @@ jobs:
         python-version: ["3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v4
+      # checkout@v4 and setup-python@v5 run on Node 20, which GitHub has
+      # deprecated -- the runner was already force-migrating them to Node
+      # 24 and warning on every job. These majors run on Node 24 natively.
+      # Verified before bumping that python-version, cache and
+      # cache-dependency-path all still exist as inputs here.
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
