@@ -34,6 +34,57 @@ from edge_engine.roster.interface import get_default_source
 
 FOLLOWING_WINDOW = 3
 
+# How much a season's numbers can be trusted, which depends entirely on
+# whether the model ever saw it. Kept as explicit labels rather than a
+# bool because the three cases mean genuinely different things and get
+# reported differently.
+IN_SAMPLE = "in-sample"
+HELD_OUT = "held-out"
+LIVE = "live"
+
+_PROVENANCE_NOTE = {
+    IN_SAMPLE: (
+        "the model trained on this season, so these numbers are flattering "
+        "and are NOT evidence of real-world performance"
+    ),
+    HELD_OUT: (
+        "out-of-sample, but this is the season the reported accuracy figures "
+        "were selected against"
+    ),
+    LIVE: (
+        "fully out-of-sample -- never trained on, never tuned against. "
+        "The most honest read on whether the edge is holding"
+    ),
+}
+
+
+def model_available() -> bool:
+    """Whether a trained artifact exists to score history with. Callers in
+    the weekly loop check this so a checkout that hasn't run `train` yet
+    skips the step with a clear message instead of dying on a file open --
+    same shape as predict_qb.qb_model_available()."""
+    return MODEL_PATH.exists()
+
+
+def season_provenance(season: int, config: ModelConfig) -> str:
+    """Whether `season` was trained on, held out, or neither.
+
+    This is the difference between a number worth acting on and a number
+    that is essentially the model grading its own homework. A live season
+    -- one the model was neither fit to nor validated against -- is the
+    only fully clean read, and in normal use (train through last season,
+    validate on last season, play the current one) that is exactly what
+    the weekly run is looking at."""
+    if season in config.train_seasons:
+        return IN_SAMPLE
+    if season == config.validation_season:
+        return HELD_OUT
+    return LIVE
+
+
+def provenance_note(provenance: str) -> str:
+    return _PROVENANCE_NOTE[provenance]
+
 
 def _load_model() -> xgb.XGBRegressor:
     model = xgb.XGBRegressor()
@@ -110,6 +161,13 @@ def summarize(tracked: pd.DataFrame) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--season", type=int, default=None,
+        help="report one specific season instead of the validation season -- "
+             "use this for the season currently being played, which the model "
+             "was neither trained on nor tuned against and is therefore the "
+             "cleanest read available",
+    )
+    parser.add_argument(
         "--include-train-seasons",
         action="store_true",
         help="also report in-sample training seasons, labeled separately (not blended with the out-of-sample number)",
@@ -117,6 +175,15 @@ def main() -> None:
     args = parser.parse_args()
 
     config = load_model_config()
+
+    if args.season is not None:
+        provenance = season_provenance(args.season, config)
+        print(f"=== Season {args.season} — {provenance} ({provenance_note(provenance)}) ===")
+        tracked = track_flagged_players([args.season], config)
+        _print_summary(summarize(tracked))
+        if not tracked.empty:
+            print(tracked.to_string(index=False))
+        return
 
     print(f"=== Out-of-sample: validation season {config.validation_season} ===")
     val_tracked = track_flagged_players([config.validation_season], config)
