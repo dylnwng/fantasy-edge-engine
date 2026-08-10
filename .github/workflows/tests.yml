@@ -44,12 +44,18 @@ jobs:
       # for the live season's schedule and passed only on machines with a
       # warm cache. Pointing the proxy vars at a dead port makes any real
       # outbound call fail fast.
+      #
+      # Set via the shell's `env` command rather than a step-level `env:`
+      # block ON PURPOSE -- do not "tidy" this back into `env:`. GitHub's
+      # workflow parser treats env keys as CASE-INSENSITIVE, so listing
+      # both HTTP_PROXY and http_proxy there is a duplicate-key error that
+      # rejects the whole file ("Invalid workflow file ... is already
+      # defined") and fails the run at startup with zero jobs and no logs.
+      # Both casings are genuinely needed: urllib reads the lowercase
+      # names, and other clients read the uppercase ones.
       - name: Run tests with no network (enforces the no-network contract)
-        env:
-          HTTP_PROXY: http://127.0.0.1:9
-          HTTPS_PROXY: http://127.0.0.1:9
-          http_proxy: http://127.0.0.1:9
-          https_proxy: http://127.0.0.1:9
-          NO_PROXY: ""
-          no_proxy: ""
-        run: python -m pytest -q
+        run: |
+          env HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 \
+              http_proxy=http://127.0.0.1:9 https_proxy=http://127.0.0.1:9 \
+              NO_PROXY= no_proxy= \
+              python -m pytest -q
