@@ -294,6 +294,57 @@ def run_walk_forward(
     }
 
 
+def walk_forward_predictions(
+    table: pd.DataFrame,
+    feat_cols: list[str],
+    seasons: Sequence[int] | None = None,
+    min_train_seasons: int = DEFAULT_MIN_TRAIN_SEASONS,
+    fit_predict: FitPredict | None = None,
+) -> pd.DataFrame:
+    """Pooled OUT-OF-SAMPLE predictions across every fold.
+
+    Same folds and same protocol as run_walk_forward, but returns the
+    per-row predictions rather than summary metrics. Columns:
+    `season`, `margin` (predicted - baseline), `beat_baseline`.
+
+    Exists so anything that needs to learn a second-stage mapping from
+    the model's output -- calibration.py turning a margin into a
+    probability, most immediately -- can fit it on predictions the model
+    genuinely did not see during training. Fitting such a mapping on
+    in-sample predictions is the classic way to end up confidently wrong:
+    the margins are too good, so the fitted curve promises accuracy that
+    does not survive contact with a new season.
+    """
+    seasons = sorted(table["season"].unique()) if seasons is None else seasons
+    folds = walk_forward_folds(seasons, min_train_seasons=min_train_seasons)
+    if not folds:
+        raise ValueError(
+            f"No folds available: {len(set(seasons))} season(s) present but each fold "
+            f"needs {min_train_seasons} training season(s) before it. Ingest more seasons."
+        )
+
+    fit_predict = fit_predict or _default_fit_predict
+    frames = []
+    for fold in folds:
+        train_df = table[table["season"].isin(fold.train_seasons)]
+        val_df = table[table["season"] == fold.validation_season]
+        if train_df.empty or val_df.empty:
+            raise ValueError(
+                f"Fold validating on {fold.validation_season} has an empty "
+                f"{'train' if train_df.empty else 'validation'} set."
+            )
+        predicted = fit_predict(train_df, val_df, feat_cols)
+        baseline = val_df["trailing_points_avg"].to_numpy()
+        frames.append(
+            pd.DataFrame({
+                "season": fold.validation_season,
+                "margin": predicted - baseline,
+                "beat_baseline": val_df["label_next_week_points"].to_numpy() > baseline,
+            })
+        )
+    return pd.concat(frames, ignore_index=True)
+
+
 def load_evaluation_table(config: ModelConfig | None = None) -> tuple[pd.DataFrame, list[str]]:
     """The same feature table train.py trains on, NaN rows dropped.
 

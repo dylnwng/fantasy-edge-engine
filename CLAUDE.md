@@ -1,7 +1,7 @@
 # Edge Engine — orientation for a new agent
 
 Fantasy football waiver-wire tool for one specific private ESPN league. Python 3.12+,
-351 tests, no network calls or credentials required to run the suite.
+376 tests, no network calls or credentials required to run the suite.
 
 ```bash
 source .venv/bin/activate && python -m pytest tests/ -q
@@ -55,6 +55,7 @@ python -m edge_engine.model.train                         # occasional, NOT week
 python -m edge_engine.model.train_qb                      # the separate QB model
 python -m edge_engine.model.walk_forward                  # rolling-origin eval, writes nothing
 python -m edge_engine.model.history [--season N]          # how past flags actually panned out
+python -m edge_engine.model.calibration [--dry-run]       # fit P(hit) from walk-forward OOS
 streamlit run app.py
 ```
 
@@ -66,6 +67,17 @@ runs optimistic. It trains in memory only and never touches `models/`. Pass a
 `fit_predict` to `run_walk_forward` to put a candidate feature set through the same
 protocol; the rejected experiments below were each judged on one season, which is
 exactly the sample size that produced the convergent finding.
+
+
+`calibration` fits P(beats own baseline) = sigmoid(a*margin+b) on walk-forward
+out-of-sample margins and writes `models/calibration.json`. Rankings then carry a
+checkable `hit_probability` beside the tier. **It refuses to save when the calibrated
+probabilities score worse than always predicting the base rate** — a miscalibrated
+probability carries more authority than the tier it sits next to, so shipping one would
+be a downgrade wearing an upgrade's clothes. Absent the artifact everything degrades to
+tiers only. Note the tiers are still margin-based on purpose: re-cutting them on
+probability would silently change which candidates survive roster_fit's
+`ACTIONABLE_TIERS` filter, and that needs measuring against real seasons first.
 
 `train` writes a static model artifact; `predict` only needs fresh *features*, so
 retraining is not part of the weekly loop.

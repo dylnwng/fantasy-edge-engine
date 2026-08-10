@@ -11,6 +11,8 @@ Usage:
 
 from __future__ import annotations
 
+import json
+import logging
 from dataclasses import dataclass
 from datetime import date
 
@@ -22,6 +24,8 @@ from edge_engine.paths import PLAYER_WEEK_PATH
 from edge_engine.ranking.usage_trend import usage_trend_explanation
 from edge_engine.roster.interface import get_default_source
 from edge_engine.roster.models import LeagueConfig, Player
+
+logger = logging.getLogger(__name__)
 
 ConfidenceTier = str  # "High" | "Medium" | "Low"
 
@@ -38,17 +42,52 @@ class RankedFreeAgent:
     baseline_score: float
     confidence_tier: ConfidenceTier
     explanation: str
+    # Calibrated P(beats his own baseline next week), or None when no
+    # calibration artifact has been fitted. Defaulted so every existing
+    # construction of this dataclass keeps working unchanged.
+    hit_probability: float | None = None
 
 
 def confidence_tier(predicted_score: float, baseline_score: float, flag_margin: float) -> ConfidenceTier:
     """A rough guide only, per the PRD -- not a dollar amount. High = worth
-    a real FAAB bid; Medium = worth a look; Low = $1 speculative claim."""
+    a real FAAB bid; Medium = worth a look; Low = $1 speculative claim.
+
+    Deliberately still margin-based even when a calibrator is fitted.
+    Re-cutting these tiers on probability thresholds would be more
+    principled, but it silently changes which candidates survive
+    roster_fit's ACTIONABLE_TIERS filter -- i.e. the default weekly view --
+    and there is no evidence yet about how much that list would grow or
+    shrink. `hit_probability` is added alongside as the checkable number;
+    switching the tiers over is a separate, evidence-gated change once
+    `python -m edge_engine.model.calibration` has been run against real
+    seasons and the effect on list size can actually be measured."""
     margin = predicted_score - baseline_score
     if margin >= 2 * flag_margin:
         return "High"
     if margin >= flag_margin:
         return "Medium"
     return "Low"
+
+
+def load_hit_probability_fn():
+    """Returns margin -> probability, or None when nothing is fitted.
+
+    Resolved once per ranking run rather than per player: reading and
+    validating the artifact for each of several hundred candidates is
+    wasted work, and a mid-run failure would leave some rows with a
+    probability and some without."""
+    from edge_engine.model import calibration
+
+    if not calibration.calibrator_available():
+        return None
+    try:
+        calibrator = calibration.load_calibrator()
+    except (OSError, ValueError, json.JSONDecodeError) as e:
+        # A corrupt or hand-edited artifact must not take down the weekly
+        # rankings over an optional extra column.
+        logger.warning("Ignoring calibration artifact (%s) -- showing tiers only.", e)
+        return None
+    return calibrator.probability
 
 
 def _explanation_for(player_week: pd.DataFrame, row: pd.Series, window: int) -> str:
@@ -137,6 +176,8 @@ def build_free_agent_rankings(
     pool = scored[scored["player_id"].isin(resolved.keys())].copy()
     pool = pool[pool["position"].isin(_startable_positions(source.get_league_config()))]
 
+    hit_probability = load_hit_probability_fn()
+
     candidates = []
     for row in pool.itertuples():
         player = resolved[row.player_id]
@@ -152,6 +193,11 @@ def build_free_agent_rankings(
                 baseline_score=float(row.baseline_score),
                 confidence_tier=confidence_tier(row.predicted_score, row.baseline_score, config.flag_margin),
                 explanation=_explanation_for(player_week, row, config.trailing_window),
+                hit_probability=(
+                    float(hit_probability(row.predicted_score - row.baseline_score))
+                    if hit_probability is not None
+                    else None
+                ),
             )
         )
 

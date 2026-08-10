@@ -146,18 +146,26 @@ def _print_table(results: list[RosterFitCandidate], omitted: int = 0) -> None:
         else:
             print("(no free-agent candidates to rank)")
         return
+    # The probability column only appears once a calibration artifact has
+    # been fitted, so an un-calibrated checkout sees exactly the table it
+    # always did rather than a column of blanks.
+    show_probability = any(r.candidate.hit_probability is not None for r in results)
+    prob_header = f"{'P(hit)':<8}" if show_probability else ""
     header = (
         f"{'Rank':<5}{'Player':<22}{'Pos':<5}{'Team':<6}"
-        f"{'Opp.Score':<11}{'Fit x':<7}{'Final':<8}{'Tier':<8}Explanation"
+        f"{'Opp.Score':<11}{'Fit x':<7}{'Final':<8}{prob_header}{'Tier':<8}Explanation"
     )
     print(header)
     print("-" * len(header))
     for i, r in enumerate(results, start=1):
         c = r.candidate
+        prob = ""
+        if show_probability:
+            prob = f"{c.hit_probability:<8.0%}" if c.hit_probability is not None else f"{'-':<8}"
         print(
             f"{i:<5}{c.name:<22}{c.position:<5}{c.team:<6}"
             f"{c.predicted_score:<11.1f}{r.scarcity_multiplier:<7.2f}{r.roster_fit_score:<8.1f}"
-            f"{c.confidence_tier:<8}{r.final_explanation}"
+            f"{prob}{c.confidence_tier:<8}{r.final_explanation}"
         )
     if omitted:
         print(f"\n({omitted} lower-confidence candidate(s) hidden — use --all to see the full list)")
