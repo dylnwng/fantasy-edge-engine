@@ -1,7 +1,7 @@
 # Edge Engine — orientation for a new agent
 
 Fantasy football waiver-wire tool for one specific private ESPN league. Python 3.12+,
-293 tests, no network calls or credentials required to run the suite.
+313 tests, no network calls or credentials required to run the suite.
 
 ```bash
 source .venv/bin/activate && python -m pytest tests/ -q
@@ -53,8 +53,18 @@ python -m edge_engine.ranking.roster_fit [--top N|--all]  # rankings only
 python -m edge_engine.simulation.matchup_cli [--week N]   # matchup + FLEX optimizer
 python -m edge_engine.model.train                         # occasional, NOT weekly
 python -m edge_engine.model.train_qb                      # the separate QB model
+python -m edge_engine.model.walk_forward                  # rolling-origin eval, writes nothing
 streamlit run app.py
 ```
+
+`walk_forward` evaluates across every ingested season instead of the single held-out
+season `train` uses, and reports **fold agreement** (how many seasons independently
+favour the model) alongside the pooled bootstrap. Fold agreement is the number to
+believe — the pooled CI treats correlated within-season rows as independent, so it
+runs optimistic. It trains in memory only and never touches `models/`. Pass a
+`fit_predict` to `run_walk_forward` to put a candidate feature set through the same
+protocol; the rejected experiments below were each judged on one season, which is
+exactly the sample size that produced the convergent finding.
 
 `train` writes a static model artifact; `predict` only needs fresh *features*, so
 retraining is not part of the weekly loop.
