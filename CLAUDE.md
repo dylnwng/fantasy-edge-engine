@@ -1,7 +1,7 @@
 # Edge Engine — orientation for a new agent
 
 Fantasy football waiver-wire tool for one specific private ESPN league. Python 3.12+,
-389 tests, no network calls or credentials required to run the suite.
+403 tests, no network calls or credentials required to run the suite.
 
 ```bash
 source .venv/bin/activate && python -m pytest tests/ -q
@@ -141,8 +141,17 @@ The convergent finding: at ~300–450 flagged players per season, single-season 
 reliably manufacture 2–6pp "improvements" that vanish or invert on the next season.
 **Treat any feature that only looks good on one season as noise until proven otherwise.**
 
-**One experiment is built but NOT yet measured:** the 3-week label horizon
-(`model/labels.py` + `scripts/compare_label_horizon.py`). The shipped model predicts next
+**Two experiments are built but NOT yet measured.** Both print a verdict and change
+nothing; adopting either is a separate, deliberate edit.
+
+**Team volume** (`model/team_volume.py` + `scripts/compare_team_volume.py`) — every
+shipped feature is a *share*, so the model can't tell a 25% target share on a 70-play
+offence from 25% on a 55-play one. Structurally different from the rejected ideas, which
+were variants of existing signals, and the shape has precedent: the QB model already
+pairs `team_attempts` with `pass_share`. Not written into the ingested table, so trying
+it costs no re-ingest.
+
+**The 3-week label horizon** (`model/labels.py` + `scripts/compare_label_horizon.py`). The shipped model predicts next
 week; a waiver claim is a multi-week commitment. The script trains one model per label and
 scores **both against the same 3-week target on the same rows** — comparing each model
 against its own label is invalid, since a 3-game average is mechanically smoother and
