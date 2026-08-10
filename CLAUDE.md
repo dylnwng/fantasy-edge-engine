@@ -1,7 +1,7 @@
 # Edge Engine — orientation for a new agent
 
 Fantasy football waiver-wire tool for one specific private ESPN league. Python 3.12+,
-403 tests, no network calls or credentials required to run the suite.
+421 tests, no network calls or credentials required to run the suite.
 
 ```bash
 source .venv/bin/activate && python -m pytest tests/ -q
@@ -141,8 +141,8 @@ The convergent finding: at ~300–450 flagged players per season, single-season 
 reliably manufacture 2–6pp "improvements" that vanish or invert on the next season.
 **Treat any feature that only looks good on one season as noise until proven otherwise.**
 
-**Two experiments are built but NOT yet measured.** Both print a verdict and change
-nothing; adopting either is a separate, deliberate edit.
+**Three experiments are built but NOT yet measured.** Each prints a verdict and changes
+nothing; adopting any of them is a separate, deliberate edit.
 
 **Team volume** (`model/team_volume.py` + `scripts/compare_team_volume.py`) — every
 shipped feature is a *share*, so the model can't tell a 25% target share on a 70-play
@@ -150,6 +150,16 @@ offence from 25% on a 55-play one. Structurally different from the rejected idea
 were variants of existing signals, and the shape has precedent: the QB model already
 pairs `team_attempts` with `pass_share`. Not written into the ingested table, so trying
 it costs no re-ingest.
+
+**Vacated opportunity** (`model/vacated_opportunity.py` +
+`scripts/compare_vacated_opportunity.py`) — would put injury context INTO the score, which
+is why it needs care: adopting it amends the "context is surfaced, never baked in"
+invariant below. That invariant is right for context a human should weigh; it is a
+separate claim that the fact carries no signal, and that claim has never been measured.
+Same shape as the QB boundary, which was assumed for the whole project and then
+replicated when finally tested. The script watches hit rate as closely as MAE — a feature
+firing only on injured-backup rows could improve average error while degrading the short
+flagged list, which is what people actually act on.
 
 **The 3-week label horizon** (`model/labels.py` + `scripts/compare_label_horizon.py`). The shipped model predicts next
 week; a waiver claim is a multi-week commitment. The script trains one model per label and
