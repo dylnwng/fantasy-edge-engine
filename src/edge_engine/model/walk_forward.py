@@ -143,6 +143,7 @@ def evaluate_fold(
     feat_cols: list[str],
     flag_margin: float,
     fit_predict: FitPredict | None = None,
+    label_col: str = "label_next_week_points",
 ) -> tuple[FoldResult, np.ndarray, np.ndarray]:
     """Train on the fold's seasons, score its validation season.
 
@@ -170,13 +171,13 @@ def evaluate_fold(
     val_df["predicted_score"] = fit_predict(train_df, val_df, feat_cols)
     val_df["baseline_score"] = val_df["trailing_points_avg"]
 
-    truth = val_df["label_next_week_points"]
+    truth = val_df[label_col]
     model_err = (val_df["predicted_score"] - truth).abs().to_numpy()
     baseline_err = (val_df["baseline_score"] - truth).abs().to_numpy()
 
     flagged = val_df[val_df["predicted_score"] - val_df["baseline_score"] > flag_margin]
     hit_rate = (
-        float((flagged["label_next_week_points"] > flagged["baseline_score"]).mean())
+        float((flagged[label_col] > flagged["baseline_score"]).mean())
         if len(flagged)
         else None
     )
@@ -233,6 +234,7 @@ def run_walk_forward(
     min_train_seasons: int = DEFAULT_MIN_TRAIN_SEASONS,
     fit_predict: FitPredict | None = None,
     seed: int = 0,
+    label_col: str = "label_next_week_points",
 ) -> dict:
     """Evaluate across every fold and pool the result.
 
@@ -256,7 +258,9 @@ def run_walk_forward(
     model_errs: list[np.ndarray] = []
     baseline_errs: list[np.ndarray] = []
     for fold in folds:
-        result, m_err, b_err = evaluate_fold(table, fold, feat_cols, flag_margin, fit_predict)
+        result, m_err, b_err = evaluate_fold(
+            table, fold, feat_cols, flag_margin, fit_predict, label_col=label_col
+        )
         logger.info(
             "%s: model MAE %.3f vs baseline %.3f (%+.3f), %d flagged, hit rate %s",
             fold.validation_season, result.model_mae, result.baseline_mae,
@@ -275,6 +279,7 @@ def run_walk_forward(
 
     return {
         "protocol": "expanding-window walk-forward",
+        "label_col": label_col,
         "n_folds": len(results),
         "validation_seasons": [r.validation_season for r in results],
         "min_train_seasons": min_train_seasons,
