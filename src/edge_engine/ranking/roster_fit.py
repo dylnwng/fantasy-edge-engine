@@ -163,6 +163,43 @@ def _print_table(results: list[RosterFitCandidate], omitted: int = 0) -> None:
         print(f"\n({omitted} lower-confidence candidate(s) hidden — use --all to see the full list)")
 
 
+def _print_drops(drop_candidates: list, swaps: list, show_all: bool) -> None:
+    """The drop side of the decision. Printed after the adds because it's
+    only actionable once you know what you're claiming."""
+    from edge_engine.ranking.drop import droppable
+
+    if not drop_candidates:
+        return
+
+    print("\n--- Who to drop ---")
+    available = droppable(drop_candidates)
+    if not available:
+        print("(no safe drop: every rostered player is protected — see below)")
+    else:
+        shown = available if show_all else available[:5]
+        header = f"{'Player':<22}{'Pos':<5}{'Value':<8}Why"
+        print(header)
+        print("-" * len(header))
+        for c in shown:
+            print(f"{c.player.name:<22}{c.player.position:<5}{c.roster_value:<8.1f}{c.explanation}")
+        if len(shown) < len(available):
+            print(f"  ...and {len(available) - len(shown)} more droppable (--all to see them)")
+
+    protected = [c for c in drop_candidates if c.is_protected]
+    if protected and show_all:
+        print("\nProtected (never recommended):")
+        for c in protected:
+            print(f"  {c.player.name} ({c.player.position}) — {c.protected_reason}")
+    elif protected:
+        print(f"\n({len(protected)} player(s) protected from dropping — --all to see why)")
+
+    if swaps:
+        print("\nSuggested swaps:")
+        for s in swaps:
+            verdict = f"+{s.gain:.1f}" if s.is_upgrade else f"{s.gain:.1f} — NOT an upgrade"
+            print(f"  Claim {s.add_name} ({s.add_value:.1f}) for {s.drop_name} ({s.drop_value:.1f}): {verdict}")
+
+
 def _print_unresolved(unresolved: list[Player], show_all: bool) -> None:
     """Unresolved free agents are surfaced, never silently dropped (a
     standing requirement) -- but a live ESPN league produced 25 of them,
@@ -203,7 +240,15 @@ def main(argv: list[str] | None = None) -> None:
     print(f"  ⚠ {staleness} days old — update roster_state/ before trusting this" if staleness > 7 else "")
     print()
 
-    candidates, unresolved = build_free_agent_rankings(config)
+    # Scored once and shared: the free-agent ranking and the drop
+    # recommendation need the same frame, and scoring twice would double
+    # the slowest part of this command for no benefit.
+    from edge_engine.model.predict import score_latest_week
+    from edge_engine.ranking.drop import rank_drop_candidates, suggest_swaps
+
+    scored = score_latest_week(config)
+
+    candidates, unresolved = build_free_agent_rankings(config, scored=scored)
     # Bye weeks come from the same resolved Player records
     # build_free_agent_rankings already matched against.
     bye_weeks_by_player_id = {
@@ -213,6 +258,11 @@ def main(argv: list[str] | None = None) -> None:
     results = apply_roster_fit(candidates, league_config, rostered, bye_weeks_by_player_id)
     visible, omitted = select_visible(results, top=args.top, show_all=args.all)
     _print_table(visible, omitted)
+
+    drop_candidates = rank_drop_candidates(rostered, scored, league_config)
+    swaps = suggest_swaps(visible, drop_candidates)
+    _print_drops(drop_candidates, swaps, show_all=args.all)
+
     _print_unresolved(unresolved, show_all=args.all)
 
 

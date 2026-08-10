@@ -1,7 +1,7 @@
 # Edge Engine — orientation for a new agent
 
 Fantasy football waiver-wire tool for one specific private ESPN league. Python 3.12+,
-332 tests, no network calls or credentials required to run the suite.
+351 tests, no network calls or credentials required to run the suite.
 
 ```bash
 source .venv/bin/activate && python -m pytest tests/ -q
@@ -49,7 +49,7 @@ switch. Keep it that way.
 ```bash
 python -m edge_engine.weekly                              # the weekly command
 python -m edge_engine.insights [--week N] [--all]         # roster diagnosis (Phase 3)
-python -m edge_engine.ranking.roster_fit [--top N|--all]  # rankings only
+python -m edge_engine.ranking.roster_fit [--top N|--all]  # rankings + who to drop
 python -m edge_engine.simulation.matchup_cli [--week N]   # matchup + FLEX optimizer
 python -m edge_engine.model.train                         # occasional, NOT weekly
 python -m edge_engine.model.train_qb                      # the separate QB model

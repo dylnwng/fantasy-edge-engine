@@ -111,10 +111,18 @@ def _startable_positions(league_config: LeagueConfig) -> set[str]:
     return positions
 
 
-def build_free_agent_rankings(config: ModelConfig | None = None) -> tuple[list[RankedFreeAgent], list[Player]]:
+def build_free_agent_rankings(
+    config: ModelConfig | None = None, scored: pd.DataFrame | None = None
+) -> tuple[list[RankedFreeAgent], list[Player]]:
     """Returns (ranked candidates sorted by predicted_score desc, unresolved
     free agents that couldn't be matched to nflverse data -- surfaced, not
-    silently dropped from the ranking)."""
+    silently dropped from the ranking).
+
+    `scored` lets a caller that already has score_latest_week()'s output
+    pass it in rather than paying for a second scoring pass -- roster_fit
+    needs the same frame to value ROSTERED players for drop
+    recommendations. Purely additive: omit it and this behaves exactly as
+    it always did."""
     config = config or load_model_config()
     source = get_default_source()
     free_agents = source.get_free_agents()
@@ -122,7 +130,8 @@ def build_free_agent_rankings(config: ModelConfig | None = None) -> tuple[list[R
     resolved = {p.player_id: p for p in free_agents if p.player_id}
     unresolved = [p for p in free_agents if not p.player_id]
 
-    scored = score_latest_week(config)
+    if scored is None:
+        scored = score_latest_week(config)
     player_week = pd.read_parquet(PLAYER_WEEK_PATH)
 
     pool = scored[scored["player_id"].isin(resolved.keys())].copy()
