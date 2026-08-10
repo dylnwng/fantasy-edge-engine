@@ -141,65 +141,47 @@ The convergent finding: at ~300–450 flagged players per season, single-season 
 reliably manufacture 2–6pp "improvements" that vanish or invert on the next season.
 **Treat any feature that only looks good on one season as noise until proven otherwise.**
 
-**Four experiments are built but NOT yet measured.** Each prints a verdict and changes
-nothing; adopting any of them is a separate, deliberate edit. All four run through
-`run_walk_forward` and are judged on fold agreement, and all four report hit rate beside
-MAE — a feature can improve average error while degrading the short flagged list, which
-is how opponent adjustment was caught.
+**Four candidate features were built AND measured via `run_walk_forward` on real
+2018–2024 data** (2025 unreachable in the environment that ran them — see EVALUATION.md's
+"Walk-forward evaluation and four candidate features" section for the full numbers and
+the caveat). All four are judged on fold agreement, with hit rate reported beside MAE —
+a feature can improve average error while degrading the short flagged list, which is how
+opponent adjustment was caught. None has been adopted yet; each remains a separate,
+deliberate edit even where the evidence supports it.
 
 **Team volume** (`model/team_volume.py` + `scripts/compare_team_volume.py`) — every
 shipped feature is a *share*, so the model can't tell a 25% target share on a 70-play
-offence from 25% on a 55-play one. Structurally different from the rejected ideas, which
-were variants of existing signals, and the shape has precedent: the QB model already
-pairs `team_attempts` with `pass_share`. Not written into the ingested table, so trying
-it costs no re-ingest.
+offence from 25% on a 55-play one. **Rejected**: 1/5 seasons favored it, pooled MAE
+slightly worse. The QB model's `team_attempts`-beside-`pass_share` precedent didn't
+transfer here.
 
 **Vacated opportunity** (`model/vacated_opportunity.py` +
-`scripts/compare_vacated_opportunity.py`) — would put injury context INTO the score, which
-is why it needs care: adopting it amends the "context is surfaced, never baked in"
-invariant below. That invariant is right for context a human should weigh; it is a
-separate claim that the fact carries no signal, and that claim has never been measured.
-Same shape as the QB boundary, which was assumed for the whole project and then
-replicated when finally tested. The script watches hit rate as closely as MAE — a feature
-firing only on injured-backup rows could improve average error while degrading the short
-flagged list, which is what people actually act on.
-
-**The 3-week label horizon** (`model/labels.
+`scripts/compare_vacated_opportunity.py`) — would put injury context INTO the score,
+which is why it needed care: adopting it amends the "context is surfaced, never baked
+in" invariant below. **Rejected on the dual-metric standard**: pooled MAE difference
+rounds to 0.000; MAE favored it 3/5 seasons but hit rate only 2/5 — the same
+MAE-improves-hit-rate-doesn't split that sank opponent adjustment. The invariant stands,
+now on measured evidence rather than an untested assumption.
 
 **Depth of target** (`model/target_depth.py` + `scripts/compare_target_depth.py`) — aDOT
-distinguishes a checkdown back from a field stretcher at the same air-yards share. The
-most incremental of the four, and adjacent to an existing signal, which is exactly where
-the previous rejections cluster — expect it to fail. Note trailing aDOT is a RATIO OF
-SUMS, not a mean of weekly ratios: the latter weights a one-target week as heavily as a
-ten-target week, so it is computed in that module rather than trailed by
-`build_features`. Undefined (no targets in the window) stays null rather than 0.0, so the
-comparison runs on players who were actually thrown to and prints how much of the pool
-that is.py` + `scripts/compare_label_horizon.
+distinguishes a checkdown back from a field stretcher at the same air-yards share.
+**Rejected, as its own docstring predicted**: 1/5 seasons on both MAE and hit rate — the
+most incremental candidate, adjacent to an existing signal, which is exactly where the
+earlier rejections cluster. Note trailing aDOT is a RATIO OF SUMS, not a mean of weekly
+ratios: the latter weights a one-target week as heavily as a ten-target week, so it's
+computed in that module rather than trailed by `build_features`. Undefined (no targets
+in the window) stays null rather than 0.0.
 
-**Depth of target** (`model/target_depth.py` + `scripts/compare_target_depth.py`) — aDOT
-distinguishes a checkdown back from a field stretcher at the same air-yards share. The
-most incremental of the four, and adjacent to an existing signal, which is exactly where
-the previous rejections cluster — expect it to fail. Note trailing aDOT is a RATIO OF
-SUMS, not a mean of weekly ratios: the latter weights a one-target week as heavily as a
-ten-target week, so it is computed in that module rather than trailed by
-`build_features`. Undefined (no targets in the window) stays null rather than 0.0, so the
-comparison runs on players who were actually thrown to and prints how much of the pool
-that is.py`).
-
-**Depth of target** (`model/target_depth.py` + `scripts/compare_target_depth.py`) — aDOT
-distinguishes a checkdown back from a field stretcher at the same air-yards share. The
-most incremental of the four, and adjacent to an existing signal, which is exactly where
-the previous rejections cluster — expect it to fail. Note trailing aDOT is a RATIO OF
-SUMS, not a mean of weekly ratios: the latter weights a one-target week as heavily as a
-ten-target week, so it is computed in that module rather than trailed by
-`build_features`. Undefined (no targets in the window) stays null rather than 0.0, so the
-comparison runs on players who were actually thrown to and prints how much of the pool
-that is. The shipped model predicts next
-week; a waiver claim is a multi-week commitment. The script trains one model per label and
-scores **both against the same 3-week target on the same rows** — comparing each model
-against its own label is invalid, since a 3-game average is mechanically smoother and
-flatters any predictor. Nothing is adopted: `train.py` still trains on
-`label_next_week_points`. Run the script before assuming either outcome.
+**The 3-week label horizon** (`model/labels.py` + `scripts/compare_label_horizon.py`) —
+the shipped model predicts next week; a waiver claim is a multi-week commitment. Scores
+both candidates against the same 3-week target on the same rows, since comparing each
+model against its own label is invalid — a 3-game average is mechanically smoother and
+flatters any predictor. **Replicates cleanly: 5/5 seasons on MAE, 5/5 on hit rate, every
+fold, no exceptions** — the same full-agreement shape as the QB volume result that
+shipped. **Not yet adopted** — `train.py` still trains on `label_next_week_points` — a
+deliberate edit to what a live model predicts is not a side effect of running a
+comparison script, and this deserves a look on 2025 once reachable. But on the evidence
+gathered so far, it's the strongest case for a change since the QB model.
 
 **Design invariants that are load-bearing:**
 
