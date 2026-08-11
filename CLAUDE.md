@@ -1,7 +1,7 @@
 # Edge Engine — orientation for a new agent
 
-Fantasy football waiver-wire tool for one specific private ESPN league. Python 3.11+,
-235 tests, no network calls or credentials required to run the suite.
+Fantasy football waiver-wire tool for one specific private ESPN league. Python 3.12+,
+440 tests, no network calls or credentials required to run the suite.
 
 ```bash
 source .venv/bin/activate && python -m pytest tests/ -q
@@ -49,12 +49,35 @@ switch. Keep it that way.
 ```bash
 python -m edge_engine.weekly                              # the weekly command
 python -m edge_engine.insights [--week N] [--all]         # roster diagnosis (Phase 3)
-python -m edge_engine.ranking.roster_fit [--top N|--all]  # rankings only
+python -m edge_engine.ranking.roster_fit [--top N|--all]  # rankings + who to drop
 python -m edge_engine.simulation.matchup_cli [--week N]   # matchup + FLEX optimizer
 python -m edge_engine.model.train                         # occasional, NOT weekly
 python -m edge_engine.model.train_qb                      # the separate QB model
+python -m edge_engine.model.walk_forward                  # rolling-origin eval, writes nothing
+python -m edge_engine.model.history [--season N]          # how past flags actually panned out
+python -m edge_engine.model.calibration [--dry-run]       # fit P(hit) from walk-forward OOS
 streamlit run app.py
 ```
+
+`walk_forward` evaluates across every ingested season instead of the single held-out
+season `train` uses, and reports **fold agreement** (how many seasons independently
+favour the model) alongside the pooled bootstrap. Fold agreement is the number to
+believe — the pooled CI treats correlated within-season rows as independent, so it
+runs optimistic. It trains in memory only and never touches `models/`. Pass a
+`fit_predict` to `run_walk_forward` to put a candidate feature set through the same
+protocol; the rejected experiments below were each judged on one season, which is
+exactly the sample size that produced the convergent finding.
+
+
+`calibration` fits P(beats own baseline) = sigmoid(a*margin+b) on walk-forward
+out-of-sample margins and writes `models/calibration.json`. Rankings then carry a
+checkable `hit_probability` beside the tier. **It refuses to save when the calibrated
+probabilities score worse than always predicting the base rate** — a miscalibrated
+probability carries more authority than the tier it sits next to, so shipping one would
+be a downgrade wearing an upgrade's clothes. Absent the artifact everything degrades to
+tiers only. Note the tiers are still margin-based on purpose: re-cutting them on
+probability would silently change which candidates survive roster_fit's
+`ACTIONABLE_TIERS` filter, and that needs measuring against real seasons first.
 
 `train` writes a static model artifact; `predict` only needs fresh *features*, so
 retraining is not part of the weekly loop.
@@ -117,6 +140,48 @@ vindicated.** Five accuracy experiments run, three rejected, one un-promoted, on
 The convergent finding: at ~300–450 flagged players per season, single-season results
 reliably manufacture 2–6pp "improvements" that vanish or invert on the next season.
 **Treat any feature that only looks good on one season as noise until proven otherwise.**
+
+**Four candidate features were built AND measured via `run_walk_forward` on real
+2018–2024 data** (2025 unreachable in the environment that ran them — see EVALUATION.md's
+"Walk-forward evaluation and four candidate features" section for the full numbers and
+the caveat). All four are judged on fold agreement, with hit rate reported beside MAE —
+a feature can improve average error while degrading the short flagged list, which is how
+opponent adjustment was caught. None has been adopted yet; each remains a separate,
+deliberate edit even where the evidence supports it.
+
+**Team volume** (`model/team_volume.py` + `scripts/compare_team_volume.py`) — every
+shipped feature is a *share*, so the model can't tell a 25% target share on a 70-play
+offence from 25% on a 55-play one. **Rejected**: 1/5 seasons favored it, pooled MAE
+slightly worse. The QB model's `team_attempts`-beside-`pass_share` precedent didn't
+transfer here.
+
+**Vacated opportunity** (`model/vacated_opportunity.py` +
+`scripts/compare_vacated_opportunity.py`) — would put injury context INTO the score,
+which is why it needed care: adopting it amends the "context is surfaced, never baked
+in" invariant below. **Rejected on the dual-metric standard**: pooled MAE difference
+rounds to 0.000; MAE favored it 3/5 seasons but hit rate only 2/5 — the same
+MAE-improves-hit-rate-doesn't split that sank opponent adjustment. The invariant stands,
+now on measured evidence rather than an untested assumption.
+
+**Depth of target** (`model/target_depth.py` + `scripts/compare_target_depth.py`) — aDOT
+distinguishes a checkdown back from a field stretcher at the same air-yards share.
+**Rejected, as its own docstring predicted**: 1/5 seasons on both MAE and hit rate — the
+most incremental candidate, adjacent to an existing signal, which is exactly where the
+earlier rejections cluster. Note trailing aDOT is a RATIO OF SUMS, not a mean of weekly
+ratios: the latter weights a one-target week as heavily as a ten-target week, so it's
+computed in that module rather than trailed by `build_features`. Undefined (no targets
+in the window) stays null rather than 0.0.
+
+**The 3-week label horizon** (`model/labels.py` + `scripts/compare_label_horizon.py`) —
+the shipped model predicts next week; a waiver claim is a multi-week commitment. Scores
+both candidates against the same 3-week target on the same rows, since comparing each
+model against its own label is invalid — a 3-game average is mechanically smoother and
+flatters any predictor. **Replicates cleanly: 5/5 seasons on MAE, 5/5 on hit rate, every
+fold, no exceptions** — the same full-agreement shape as the QB volume result that
+shipped. **Not yet adopted** — `train.py` still trains on `label_next_week_points` — a
+deliberate edit to what a live model predicts is not a side effect of running a
+comparison script, and this deserves a look on 2025 once reachable. But on the evidence
+gathered so far, it's the strongest case for a change since the QB model.
 
 **Design invariants that are load-bearing:**
 

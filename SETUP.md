@@ -11,7 +11,7 @@ to find out now than after the download.
 
 ## 0. What you need
 
-- **Python 3.11+**
+- **Python 3.12+**
 - **An ESPN fantasy football league.** ESPN only. Sleeper, Yahoo and NFL.com
   are not supported and adding them is not a small change.
 - ~2 GB of disk for the cached NFL data.
@@ -38,7 +38,7 @@ Check it worked:
 python -m pytest -q
 ```
 
-You should see ~249 tests pass. They use synthetic data only — no network,
+You should see ~440 tests pass. They use synthetic data only — no network,
 no credentials.
 
 ---

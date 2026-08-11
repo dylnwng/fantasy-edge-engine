@@ -534,6 +534,87 @@ inherited as an assumption deserves the same test as a new feature. This one was
 carried for the whole project on an argument that sounded mechanical and was never
 actually measured.
 
+## Walk-forward evaluation and four candidate features, measured for real
+
+Every result up to this point validated on a single held-out season. That's the exact
+sample size (~300–450 flagged players) the "Three things that looked like edge and
+weren't" section above shows manufactures 2–6 point illusions. `model/walk_forward.py`
+exists to fix that: expanding-window rolling-origin evaluation across every ingested
+season, reporting fold agreement (how many seasons independently favor a change)
+alongside a pooled bootstrap — and saying which one to believe when they disagree.
+
+**Data note.** This ran on seasons 2018–2024 (7 seasons, real nflverse play-by-play,
+injuries, and weekly stats — not synthetic). 2025 could not be ingested in the
+environment this ran in: nflverse hasn't published 2025's aggregated weekly table yet,
+which routes ingestion through `pbp_fallback.py`'s reconstruction path, and that path's
+roster-identity step depends on a host (`habitatring.com`) that environment's network
+policy didn't allow. Every number below is real, out-of-sample, and reproducible with
+`python -m edge_engine.model.walk_forward` and the four `scripts/compare_*.py` scripts —
+just missing one season this run happened not to reach.
+
+**The baseline, re-confirmed under the stricter test.** Walk-forward across 2018–2024
+(5 folds, validating 2020 through 2024) puts the shipped model ahead of the naive
+trailing-average baseline in **5 of 5 seasons**, pooled hit rate 68.3%, 100% of bootstrap
+resamples favoring the model, 90% CI [+0.430, +0.527] MAE clear of zero:
+
+| Validation season | Model MAE | Baseline MAE | Hit rate |
+|---|---|---|---|
+| 2020 | 5.397 | 5.882 | 64.3% |
+| 2021 | 5.251 | 5.781 | 70.3% |
+| 2022 | 5.208 | 5.608 | 66.0% |
+| 2023 | 4.933 | 5.368 | 68.4% |
+| 2024 | 5.055 | 5.601 | 72.4% |
+
+That's a stricter test than the single-season number this document leads with, and the
+edge holds up under it — five independent seasons, not one.
+
+Four candidate features went through the identical protocol, each scored against the
+shipped model on the same rows:
+
+**Team volume — rejected.** Trailing team plays and team pass attempts, alongside the
+existing share-based features. 1 of 5 seasons favored it; pooled MAE was very slightly
+*worse* (5.178 vs. 5.167). The hypothesis was sound — a share means something different
+on a 70-play offense than a 55-play one — but on 2018–2024 the model was already
+capturing the signal, or there wasn't enough independent signal left to add.
+
+**Vacated opportunity — rejected on the project's own dual-metric standard.** Summed
+trailing snap share of injured, same-position teammates who were ahead of the player,
+plus their worst designation. This is the one that would have amended the "context is
+never baked into the score" invariant, so the bar was deliberately high. The feature
+fires on 12.4% of rows; pooled MAE difference rounds to 0.000; MAE favored it in 3 of 5
+seasons but hit rate favored it in only 2 of 5 — the exact MAE-improves-hit-rate-doesn't
+split that sank the opponent-adjustment experiment earlier in this document. The
+invariant stands, on real evidence rather than an assumption this time.
+
+**Depth of target (aDOT) — rejected, as expected.** The most incremental candidate,
+adjacent to the existing `air_yards_share` feature rather than a new axis. 1 of 5 seasons
+on both MAE and hit rate. This is the outcome the module's own docstring predicted before
+it was measured — incremental variants of existing signals are exactly where the earlier
+rejections (opponent adjustment, usage persistence) cluster.
+
+**The 3-week label horizon — replicates cleanly, and clears the bar this project sets for
+adoption.** The shipped model trains on next week's points; a waiver claim is a
+multi-week commitment. Training on the mean of the next three played games instead, and
+scoring both candidates against that same 3-week target on the same rows (so neither
+gets an easier comparison), the 3-week-trained model wins **5 of 5 seasons on MAE and
+5 of 5 on hit rate** — every fold, both metrics, no exceptions:
+
+| Validation season | 1wk-trained MAE | 3wk-trained MAE | 1wk hit rate | 3wk hit rate |
+|---|---|---|---|---|
+| 2020 | 3.807 | 3.743 | 77.8% | 82.4% |
+| 2021 | 3.638 | 3.525 | 79.5% | 83.7% |
+| 2022 | 3.828 | 3.774 | 77.2% | 80.2% |
+| 2023 | 3.559 | 3.473 | 81.4% | 84.0% |
+| 2024 | 3.600 | 3.555 | 85.9% | 88.4% |
+
+That is the same shape as the QB volume result that shipped: full agreement across
+independent seasons, on the metric people actually act on. It is **not yet adopted** —
+`train.py` still trains on `label_next_week_points` — because doing so is a deliberate
+edit to what a live model predicts for a real league, not a default outcome of running a
+comparison script, and it deserves a second look on 2025 once that season is reachable.
+But on the evidence gathered so far, this is the strongest case for a change since the
+QB model shipped.
+
 ## Bottom line
 
 The model beats a naive rolling-average baseline by a real but modest margin (~10% MAE

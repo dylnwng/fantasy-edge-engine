@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 
 from edge_engine.ingestion.pipeline import ingest_seasons
+from edge_engine.model.config import load_model_config
 from edge_engine.ranking.roster_fit import main as run_roster_fit
 from edge_engine.roster.interface import RosterStateSource, get_default_source
 
@@ -51,6 +52,60 @@ def refresh_current_season(season: int) -> None:
             f"published this season's weekly stats yet. Continuing with "
             f"whatever data is already ingested."
         )
+
+
+def report_flag_history(season: int) -> None:
+    """How the players this tool flagged THIS season have actually done.
+
+    The single most useful thing the weekly run can tell you that the
+    rankings themselves can't: whether the edge is still there. Every
+    accuracy figure in the docs comes from a season that has already
+    finished; this is the one that accrues while you're using it, and
+    the current season is normally one the model was neither trained on
+    nor tuned against, which makes it the cleanest evidence available.
+
+    Never fatal. A checkout that hasn't trained yet, a season too early
+    to have gradeable flags, an unreadable artifact -- all of those are
+    reasons to skip a report, not to lose the rankings printed above.
+    Same discipline as refresh_current_season and the matchup simulator.
+    """
+    from edge_engine.model import history
+
+    if not history.model_available():
+        print(
+            "Skipping flag history: no trained model yet -- "
+            "run `python -m edge_engine.model.train` first."
+        )
+        return
+
+    try:
+        config = load_model_config()
+        tracked = history.track_flagged_players([season], config)
+        summary = history.summarize(tracked)
+    except Exception as e:
+        # Broad on purpose, matching this module's other steps: the
+        # rankings above are already printed and still valid, and no
+        # failure to grade past flags is worth discarding them over.
+        print(f"Skipping flag history: {e}")
+        return
+
+    provenance = history.season_provenance(season, config)
+    print(f"{season} flags — {provenance} ({history.provenance_note(provenance)}).")
+
+    if not summary["n_flagged"]:
+        # Genuinely nothing to grade yet rather than a failure: flags need
+        # a full trailing window to exist, and then at least one further
+        # game to be judged against.
+        print("  No flags with a following game to grade against yet.")
+        return
+
+    print(
+        f"  {summary['n_flagged']} flagged player-week(s) graded: "
+        f"{summary['hit_rate_3wk']:.1%} beat their own baseline over the next "
+        f"up-to-3 games, by {summary['avg_points_above_baseline']:+.2f} pts on average."
+    )
+    if provenance == history.IN_SAMPLE:
+        print("  Treat this as a sanity check, not as evidence — the model saw this season.")
 
 
 def run_matchup_simulator_if_live(source: RosterStateSource) -> None:
@@ -105,6 +160,13 @@ def main() -> None:
         print()
         print("=== Matchup simulator ===")
         run_matchup_simulator_if_live(source)
+
+        # Last, deliberately: this grades past advice rather than
+        # producing this week's, so it belongs after the output you
+        # actually act on.
+        print()
+        print("=== How this season's flags have panned out ===")
+        report_flag_history(season)
     except RuntimeError as e:
         # An ESPN auth/config failure (see espn_source.py's _get_league) --
         # already a clear, actionable message by construction. Stop here

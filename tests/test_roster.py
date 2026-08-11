@@ -100,6 +100,7 @@ def test_missing_csv_file_raises_clear_message(tmp_path, monkeypatch):
     # free_agents.csv deliberately not created
 
     monkeypatch.setattr(manual_source.PlayerLookup, "build", classmethod(lambda cls: _StubLookup({})))
+    monkeypatch.setattr(manual_source, "get_bye_weeks", lambda season: {})
 
     source = ManualRosterStateSource(base_dir=tmp_path)
     with pytest.raises(RuntimeError, match="README"):
@@ -113,6 +114,7 @@ def test_csv_missing_required_column_raises_clear_message(tmp_path, monkeypatch)
     (tmp_path / "free_agents.csv").write_text("name,team\nBob Smith,KC\n")  # no "position" column
 
     monkeypatch.setattr(manual_source.PlayerLookup, "build", classmethod(lambda cls: _StubLookup({})))
+    monkeypatch.setattr(manual_source, "get_bye_weeks", lambda season: {})
 
     source = ManualRosterStateSource(base_dir=tmp_path)
     with pytest.raises(RuntimeError, match="position"):

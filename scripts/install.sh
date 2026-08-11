@@ -13,3 +13,9 @@ fi
 
 pip install -r requirements.txt
 pip install --no-deps nfl_data_py==0.3.3
+
+# src-layout: tests and the `python -m edge_engine.*` entry points import
+# `edge_engine`, which isn't importable from a bare checkout. Without this
+# the documented first step after installing (`python -m pytest -q`) fails
+# with ModuleNotFoundError.
+pip install -e .
