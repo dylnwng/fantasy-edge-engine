@@ -347,7 +347,7 @@ with tab_roster:
                 }
                 for s in sorted(report.scarcity, key=lambda x: x.position)
             ]),
-            hide_index=True, use_container_width=True,
+            hide_index=True, width="stretch",
         )
 
         st.markdown("**Buy low / sell high**")
@@ -467,7 +467,7 @@ with tab_draft:
                 }
                 for b in shown
             ]),
-            hide_index=True, use_container_width=True,
+            hide_index=True, width="stretch",
         )
     except RuntimeError:
         st.info(
