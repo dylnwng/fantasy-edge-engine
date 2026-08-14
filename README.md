@@ -79,6 +79,10 @@ concept of one — there's no payoff to hand-maintaining an opponent's roster ev
 > [`SETUP.md`](SETUP.md) — it walks through the whole thing end to end, and
 > its §4 tells you up front whether your league is even compatible (ESPN
 > only, no auction drafts, and the model doesn't cover kickers or defenses).
+> Bringing this to a **second, independent team** — a friend's league on
+> their own checkout? [`INTEGRATION.md`](INTEGRATION.md) covers that
+> specifically, including an ordering trap `SETUP.md` doesn't warn about and
+> what's actually been verified end-to-end versus just traced through code.
 
 One-time setup:
 
@@ -165,6 +169,7 @@ theme.py         its visual design system (dark, DIN Condensed, film-room termin
 model_config.yaml        opportunity model settings (seasons, thresholds)
 simulation_config.yaml   matchup simulator settings (sim count, variance window, swap threshold)
 EVALUATION.md    the full written evaluation — methodology, results, and what didn't work
+INTEGRATION.md   bringing a second, independent team onto their own checkout
 data/roster_state/README.md   the manual input format, if not using the ESPN connector
 ```
 
