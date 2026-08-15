@@ -433,6 +433,21 @@ with tab_trade:
 with tab_draft:
     st.subheader("Draft board")
 
+    with st.expander("Live draft night screen"):
+        st.caption(
+            "This is a separate, always-fast screen built for live picks — not something "
+            "Streamlit can run itself, so it needs its own process running alongside this "
+            "dashboard. Start it in another terminal before opening this:"
+        )
+        st.code("python -m edge_engine.draft --serve --espn", language="bash")
+        live_port = st.number_input("Port", min_value=1, max_value=65535, value=8765, key="draft_live_port")
+        if st.checkbox("Show it here", key="draft_live_show"):
+            st.components.v1.iframe(f"http://127.0.0.1:{int(live_port)}", height=750, scrolling=True)
+            st.caption(
+                "Blank or \"can't connect\"? The command above isn't running yet, or is on a "
+                "different port — start it, or fix the port number above to match."
+            )
+
     try:
         from edge_engine.draft.board import build_board, late_season_divergence
         from edge_engine.draft.market import default_market_source
