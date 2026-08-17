@@ -44,10 +44,23 @@ OUTPUT_COLUMNS = BASE_COLUMNS[:-1] + [
     "fantasy_points_ppr",
 ]
 
+# The model only covers these positions (CLAUDE.md: "no usage data exists"
+# for K/DST). Filtered here rather than in raw.py because two different
+# sources feed into _base_usage() below -- the direct weekly-data fetch
+# and pbp_fallback.py's play-by-play reconstruction, which sources
+# identity from a separate, unfiltered roster table -- and filtering only
+# one of them would let non-skill positions back in through the other.
+# Real, not hypothetical: verified against 2021 (via reconstruction) and
+# 2023 (via direct fetch), both of which otherwise carry a handful of
+# defenders and linemen with a non-null target_share from trick plays and
+# fumble-return scoring.
+SKILL_POSITIONS = ["QB", "RB", "WR", "TE"]
+
 
 def _base_usage(season: int, force_refresh: bool) -> pd.DataFrame:
     weekly = raw.fetch_weekly_data_or_reconstruct(season, force_refresh)
     weekly = weekly[weekly["season_type"] == "REG"].copy()
+    weekly = weekly[weekly["position"].isin(SKILL_POSITIONS)]
     # nflverse's own weekly table carries both `player_name` (abbreviated)
     # and `player_display_name` (full), plus `recent_team`; the
     # play-by-play reconstruction (pbp_fallback.py) already emits the

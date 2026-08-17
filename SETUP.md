@@ -29,8 +29,10 @@ python3 -m venv .venv && source .venv/bin/activate
 bash scripts/install.sh
 ```
 
-`install.sh` exists because `nfl_data_py` needs a two-step install — don't
-replace it with a plain `pip install -r requirements.txt`.
+`install.sh` exists because a plain `pip install -r requirements.txt` skips
+the editable install (`pip install -e .`) that makes `edge_engine` importable
+from a bare checkout, and (on macOS) the OpenMP runtime xgboost needs but
+doesn't bundle — don't replace it with a plain `pip install`.
 
 Check it worked:
 

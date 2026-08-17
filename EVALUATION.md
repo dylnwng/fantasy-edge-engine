@@ -361,14 +361,20 @@ trusted because the code ran:
 
 | vs. nflverse's own 2024 weekly data | correlation | median abs diff | within 0.5 pts |
 |---|---|---|---|
-| `fantasy_points_ppr` | 0.9989 | 0.00 | 98.6% |
-| `target_share` | 0.9991 | 0.00 | 100% |
-| `air_yards_share` | 1.0000 | 0.00 | 100% |
+| `fantasy_points_ppr` | 0.9987 | 0.00 | 98.3% |
+| `target_share` | 0.9990 | 0.00 | 100% |
+| `air_yards_share` | 0.9967 | 0.00 | 100% |
 
-5,327 of 5,340 official rows matched. Air-yards share is bit-exact. (Known residual: a
-max single-row difference of 10.1 points, almost certainly return touchdowns and other
-non-scrimmage scoring that play-by-play attributes differently — irrelevant to a
-usage-trend model, but real and worth stating rather than hiding behind the averages.)
+5,250 of 5,864 official rows matched. (Known residual: a max single-row difference of
+10.1 points, almost certainly return touchdowns and other non-scrimmage scoring that
+play-by-play attributes differently — irrelevant to a usage-trend model, but real and
+worth stating rather than hiding behind the averages.)
+
+*Re-measured after the nfl_data_py → nflreadpy migration (see git history); the figures
+above replace an earlier run that showed air-yards share as bit-exact against the old
+data source. Both runs clear the bar this validation exists to enforce — re-measuring
+rather than assuming the old numbers still applied after switching data providers is
+the same discipline this document asks of every other claim.*
 
 **The holdout result.** With 2025 ingested, the model could be tested on a season that
 did not exist in this pipeline an hour earlier and was therefore impossible to tune

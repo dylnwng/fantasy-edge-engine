@@ -87,8 +87,8 @@ concept of one — there's no payoff to hand-maintaining an opponent's roster ev
 One-time setup:
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate  # Python 3.11+
-bash scripts/install.sh          # nfl_data_py needs a two-step install, see the script
+python3 -m venv .venv && source .venv/bin/activate  # Python 3.12+
+bash scripts/install.sh
 python -m edge_engine.ingestion.pipeline --seasons 2018 2019 2020 2021 2022 2023 2024 2025
 python -m edge_engine.model.train        # WR / RB / TE
 python -m edge_engine.model.train_qb     # QB (separate feature space)

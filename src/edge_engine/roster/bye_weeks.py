@@ -28,8 +28,7 @@ def get_bye_weeks(season: int, force_refresh: bool = False) -> dict[str, int]:
         sched = nflverse_ref.fetch_schedules(season, force_refresh)
     except RuntimeError as e:
         # The schedule fetch can fail for reasons that have nothing to do
-        # with this code: nflverse (or habitatring.com, which
-        # nfl_data_py's import_schedules actually reads) being down or
+        # with this code: nflverse's release host being down or
         # rate-limiting, no connectivity, or a season whose schedule
         # genuinely hasn't been published yet.
         #

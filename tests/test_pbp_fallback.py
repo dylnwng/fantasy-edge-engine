@@ -136,10 +136,11 @@ def test_player_team_map_resolves_team_and_opponent():
 
 
 def test_season_with_no_play_by_play_fails_with_a_clear_message(monkeypatch):
-    # nfl_data_py returns an EMPTY frame (no columns) for a season it has
-    # no data for rather than raising, so the reconstruction used to die
-    # on a bare KeyError: 'season_type'. This is the normal state for a
-    # season that hasn't been played yet.
+    # An empty frame (no columns) is the shape a season with no play-by-play
+    # data yet would take if it reached build_weekly_from_pbp at all, so
+    # without this guard the reconstruction dies on a bare KeyError:
+    # 'season_type'. This is the normal state for a season that hasn't
+    # been played yet.
     monkeypatch.setattr(
         pbp_fallback, "fetch_pbp_data", lambda season, force_refresh=False: pd.DataFrame()
     )

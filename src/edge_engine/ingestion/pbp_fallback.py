@@ -1,10 +1,10 @@
-"""Rebuild the per-player weekly stat lines that `nfl_data_py.
-import_weekly_data()` normally provides, from raw play-by-play instead.
+"""Rebuild the per-player weekly stat lines that `nflreadpy.
+load_player_stats()` normally provides, from raw play-by-play instead.
 
 Why this exists: nflverse publishes its pre-aggregated `player_stats_<year>`
-table on a lag. For the 2025 season, `import_weekly_data([2025])` 404s
-while `import_pbp_data([2025])` returns a complete season (48,771 plays,
-weeks 1-20) and `import_snap_counts([2025])` returns 26,612 rows. So the
+table on a lag. For the 2025 season, `load_player_stats(2025)` returned
+nothing while `load_pbp(2025)` returned a complete season (48,771 plays,
+weeks 1-20) and `load_snap_counts(2025)` returned 26,612 rows. So the
 underlying facts are all there; only the convenience aggregation is
 missing. Without this module the opportunity model simply cannot see a
 season that has already been played.
@@ -104,14 +104,16 @@ def _player_team_map(pbp: pd.DataFrame) -> pd.DataFrame:
 
 def build_weekly_from_pbp(season: int, force_refresh: bool = False) -> pd.DataFrame:
     """A per-player, per-week frame shaped like the subset of
-    import_weekly_data() that transform.py consumes, derived from
+    load_player_stats() that transform.py consumes, derived from
     play-by-play."""
     pbp = fetch_pbp_data(season, force_refresh)
-    # nfl_data_py returns an EMPTY frame (no columns at all) for a season
-    # it has no play-by-play for, rather than raising -- so without this
-    # guard the next line dies on a bare KeyError: 'season_type', which
-    # tells the caller nothing about the actual problem. This is the
-    # normal state for a season that hasn't started yet.
+    # nflreadpy raises ValueError for a season past its own
+    # get_current_season() boundary (the Thursday after Labor Day) --
+    # that surfaces through cached_fetch as a RuntimeError before this
+    # function is even reached, with an equally clear message. This guard
+    # covers the remaining case: an empty frame for a season inside that
+    # range nflverse genuinely has no plays for yet, which would otherwise
+    # die on a bare KeyError: 'season_type' several lines down.
     if pbp.empty or "season_type" not in pbp.columns:
         raise RuntimeError(
             f"nflverse has no play-by-play for {season} either, so weekly stats can't be "
@@ -241,12 +243,13 @@ def _attach_shares(weekly: pd.DataFrame) -> pd.DataFrame:
 
 def _attach_identity(weekly: pd.DataFrame, season: int) -> pd.DataFrame:
     """Player name and position, which play-by-play doesn't carry
-    reliably. import_weekly_rosters() is week-indexed and available for
-    2025, so a mid-season position change is reflected rather than
-    flattened to a season-long guess."""
-    import nfl_data_py as nfl
+    reliably. load_rosters_weekly() is week-indexed and available for the
+    current season, so a mid-season position change is reflected rather
+    than flattened to a season-long guess."""
+    import nflreadpy as nfr
 
-    rosters = nfl.import_weekly_rosters([season])
+    rosters = nfr.load_rosters_weekly(season).to_pandas()
+    rosters = rosters.rename(columns={"gsis_id": "player_id", "full_name": "player_name"})
     rosters = rosters[["season", "week", "player_id", "player_name", "position"]].drop_duplicates(
         subset=["season", "week", "player_id"]
     )

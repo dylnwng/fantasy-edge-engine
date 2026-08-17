@@ -1,33 +1,41 @@
-"""Cached fetches from nfl_data_py.
+"""Cached fetches from nflreadpy.
 
 Each function pulls one raw nflverse table and caches it to
 data/raw/<name>.parquet so re-running the pipeline for an already-fetched
 season doesn't hit the network again. Pass force_refresh=True to bypass
 the cache (e.g. to pick up corrections nflverse pushed for a week that
 already looked "final").
+
+nflreadpy returns Polars DataFrames; every fetch below converts to pandas
+immediately so nothing downstream of this module has to know the
+difference. Migrated from nfl_data_py (see git history) because it's the
+actively maintained successor from the same nflverse team.
+
+Position scope (QB/RB/WR/TE only) is deliberately NOT filtered here.
+nfl_data_py's old import_weekly_data() used to enforce that as a side
+effect of its own undocumented row filter, but this module has two paths
+into weekly data -- this direct fetch, and pbp_fallback.py's
+reconstruction, which sources identity from a different, unfiltered
+roster table -- and filtering only one of them let non-skill positions
+back in through the other. See transform.py's _base_usage(), the one
+place both paths converge, for the actual filter.
 """
 
 from __future__ import annotations
 
 import logging
-import warnings
 
+import nflreadpy as nfr
 import pandas as pd
 
 from edge_engine.nflverse_cache import cached_fetch
-
-warnings.filterwarnings("ignore", module="nfl_data_py")
 
 logger = logging.getLogger(__name__)
 
 
 def fetch_weekly_data(season: int, force_refresh: bool = False) -> pd.DataFrame:
-    import nfl_data_py as nfl
-
     return cached_fetch(
-        f"weekly_data_{season}",
-        lambda: nfl.import_weekly_data([season], downcast=True),
-        force_refresh,
+        f"weekly_data_{season}", lambda: nfr.load_player_stats(season).to_pandas(), force_refresh
     )
 
 
@@ -63,37 +71,34 @@ def fetch_weekly_data_or_reconstruct(season: int, force_refresh: bool = False) -
 
 
 def fetch_snap_counts(season: int, force_refresh: bool = False) -> pd.DataFrame:
-    import nfl_data_py as nfl
-
     return cached_fetch(
-        f"snap_counts_{season}", lambda: nfl.import_snap_counts([season]), force_refresh
+        f"snap_counts_{season}", lambda: nfr.load_snap_counts(season).to_pandas(), force_refresh
     )
 
 
 def fetch_pbp_data(season: int, force_refresh: bool = False) -> pd.DataFrame:
-    import nfl_data_py as nfl
-
     return cached_fetch(
-        f"pbp_data_{season}",
-        lambda: nfl.import_pbp_data([season], downcast=True),
-        force_refresh,
+        f"pbp_data_{season}", lambda: nfr.load_pbp(season).to_pandas(), force_refresh
     )
 
 
 def fetch_injuries(season: int, force_refresh: bool = False) -> pd.DataFrame:
-    import nfl_data_py as nfl
-
     return cached_fetch(
-        f"injuries_{season}", lambda: nfl.import_injuries([season]), force_refresh
+        f"injuries_{season}", lambda: nfr.load_injuries(season).to_pandas(), force_refresh
     )
 
 
 def fetch_id_crosswalk(force_refresh: bool = False) -> pd.DataFrame:
-    """gsis_id <-> pfr_id crosswalk. Not season-scoped, cached under a fixed key."""
-    import nfl_data_py as nfl
+    """gsis_id <-> pfr_id crosswalk. Not season-scoped, cached under a fixed key.
 
+    nfl_data_py's import_ids() sourced this from DynastyProcess's own CSV
+    export; nflreadpy's equivalent (load_ff_playerids()) re-fetches the
+    same DynastyProcess file directly from its GitHub repo rather than a
+    package-bundled copy. load_players() carries the same gsis_id/pfr_id
+    columns from nflverse's own player table instead, so it's used here --
+    one fewer external host to depend on for the same mapping."""
     return cached_fetch(
         "id_crosswalk",
-        lambda: nfl.import_ids()[["gsis_id", "pfr_id"]].dropna().drop_duplicates(),
+        lambda: nfr.load_players().to_pandas()[["gsis_id", "pfr_id"]].dropna().drop_duplicates(),
         force_refresh,
     )

@@ -107,12 +107,14 @@ The edge is real, modest, and honestly measured. Don't inflate these numbers.
 
 ## Non-obvious things that will bite you
 
-**2025 data is reconstructed, not fetched.** `import_weekly_data([2025])` 404s — nflverse
-publishes its aggregated `player_stats_<year>` table on a lag, while the play-by-play it's
-derived from is already complete. `ingestion/pbp_fallback.py` rebuilds the stat lines from
-raw plays, gated on reproducing 2024 where both sources exist (0.9989 correlation on
-fantasy points, exactly 1.0000 on air-yards share). **Call
-`fetch_weekly_data_or_reconstruct()`, not `fetch_weekly_data()`.**
+**The current, in-progress season is reconstructed, not fetched.** nflverse publishes its
+aggregated `player_stats_<year>` table on a lag behind the play-by-play it's derived from,
+so `load_player_stats()` returns nothing for a season still being played while
+`load_pbp()` for that same season is already complete. `ingestion/pbp_fallback.py`
+rebuilds the stat lines from raw plays, gated on reproducing 2024 where both sources exist
+(0.9987 correlation on fantasy points, 0.9990 on target share, 0.9967 on air-yards share —
+see `EVALUATION.md`). **Call `fetch_weekly_data_or_reconstruct()`, not
+`fetch_weekly_data()`.**
 
 **QBs use a SECOND model.** `model/qb_features.py` + `train_qb.py` + `predict_qb.py`.
 Its features are volume (attempts, pass share, rush attempts), not receiving usage, and
