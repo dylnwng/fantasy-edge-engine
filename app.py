@@ -216,7 +216,11 @@ st.title("Edge Engine")
 st.caption("The waiver wire, your roster, trades and your draft — all read off who's actually getting the ball.")
 
 col_refresh, _ = st.columns([1, 5])
-if col_refresh.button("↻ Refresh", help="Pull the latest numbers"):
+if col_refresh.button(
+    "↻ Refresh",
+    help="Re-read the numbers from disk. To pull fresh stats down first, run "
+         "`python -m edge_engine.weekly` in a terminal, then hit this.",
+):
     load_rankings.clear()
     load_usage.clear()
 
@@ -322,7 +326,13 @@ with tab_roster:
         merged, usage_season, latest_week, season_note = load_usage()
         c1, c2 = st.columns(2)
         window = c1.slider("Look back how many games?", 2, 6, 3)
-        week = c2.slider("Through week", 1, latest_week, latest_week)
+        # st.slider raises when min == max, and week 1 is a real state
+        # (the season's first week of data). One week needs no slider.
+        if latest_week > 1:
+            week = c2.slider("Through week", 1, latest_week, latest_week)
+        else:
+            week = latest_week
+            c2.caption("Only week 1 is in the books so far.")
 
         config = load_model_config()
         report = build_report(

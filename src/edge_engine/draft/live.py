@@ -54,6 +54,7 @@ class EspnDraftPickSource:
                 "to .env and fill in your league's values."
             ) from e
         self._league = None
+        self._fetched_once = False
 
     def describe(self) -> str:
         return f"ESPN league {self.league_id} ({self.year}) draft detail"
@@ -84,9 +85,14 @@ class EspnDraftPickSource:
     def fetch_picks(self) -> list[Pick]:
         league = self._get_league()
         # refresh_draft() re-hits mDraftDetail; on the first call the
-        # constructor has already populated it.
-        if getattr(league, "draft", None):
+        # constructor has already populated it. Gated on "have we fetched
+        # before", NOT on whether league.draft is non-empty: a server
+        # started before the draft begins sees an empty pick list, and an
+        # emptiness guard would then never refresh again -- the exact
+        # draft-night startup sequence would show zero live picks forever.
+        if self._fetched_once:
             league.refresh_draft()
+        self._fetched_once = True
         raw = getattr(league, "draft", []) or []
         return [
             Pick(

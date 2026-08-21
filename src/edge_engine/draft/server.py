@@ -97,7 +97,7 @@ def _value_bar(player: BoardPlayer, board: list[BoardPlayer]) -> float:
     return round(1.0 - (player.adp - best) / (worst - best), 3)
 
 
-PAGE = """<!doctype html>
+PAGE = r"""<!doctype html>
 <meta charset="utf-8"><title>Draft</title>
 <style>
   :root { color-scheme: dark; }
@@ -118,6 +118,10 @@ PAGE = """<!doctype html>
   .run { font-size:19px; color:#ffb020; margin-top:8px; }
   .need { font-size:19px; margin-top:8px; }
   li { list-style:none; font-size:17px; }
+  #pick { position:fixed; bottom:10px; left:14px; right:14px; display:flex; gap:8px; }
+  #pick input { flex:1; background:#111; color:#fff; border:1px solid #444;
+                font:inherit; font-size:17px; padding:6px 9px; }
+  #pickmsg { font-size:15px; color:#ff4444; align-self:center; }
 </style>
 <div class="stale" id="stale">—</div>
 <div id="err"></div>
@@ -132,6 +136,11 @@ PAGE = """<!doctype html>
     <ul id="roster"></ul>
   </div>
 </div>
+<form id="pick">
+  <input id="pickname" autocomplete="off" spellcheck="false"
+         placeholder="drafted player's name — prefix with * if it's your pick">
+  <span id="pickmsg"></span>
+</form>
 <script>
 // No animation anywhere: a transition is a period during which the screen
 // is lying about board state.
@@ -167,6 +176,25 @@ async function tick(){
     '<li>' + esc(p.position) + '  ' + esc(p.name) + '</li>').join('');
 }
 tick(); setInterval(tick, 2000);
+
+// Manual pick entry: the fallback the error banner points at when the
+// poll dies, and the only entry path without --espn. Keyboard-only.
+document.getElementById('pick').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const input = document.getElementById('pickname');
+  const msg = document.getElementById('pickmsg');
+  const raw = input.value.trim();
+  if (!raw) return;
+  const mine = raw.startsWith('*');
+  const name = raw.replace(/^\*+/, '').trim();
+  try {
+    const r = await fetch('/pick', { method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name, mine }) });
+    if (r.ok) { input.value = ''; msg.textContent = ''; tick(); }
+    else { msg.textContent = "'" + name + "' isn't on the board"; }
+  } catch (e) { msg.textContent = 'pick not recorded — no connection'; }
+});
 </script>
 """
 
@@ -182,6 +210,27 @@ def _make_handler(state: ServerState):
                 body = PAGE.encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_POST(self):  # noqa: N802
+            if self.path.startswith("/pick"):
+                length = int(self.headers.get("Content-Length", 0))
+                try:
+                    payload = json.loads(self.rfile.read(length) or b"{}")
+                    name = str(payload.get("name", "")).strip()
+                    mine = bool(payload.get("mine", False))
+                except (ValueError, UnicodeDecodeError):
+                    name, mine = "", False
+                ok = bool(name) and manual_pick(state, name, mine=mine)
+                body = json.dumps({"ok": ok}).encode()
+                self.send_response(200 if ok else 404)
+                self.send_header("Content-Type", "application/json")
+            else:
+                body = b"{}"
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -225,9 +274,20 @@ def manual_pick(state: ServerState, name: str, mine: bool = False) -> bool:
     if match is None:
         return False
     with state.lock:
+        # Next UNOCCUPIED slot, not pick-count + 1: when the ESPN poll has
+        # already keyed real picks by (round, pick), count-derived keys can
+        # land on an occupied slot and silently overwrite a real pick --
+        # putting an already-drafted player back into the pool.
         n = len(state.draft.picks) + 1
+        while ((n - 1) // 12 + 1, (n - 1) % 12 + 1) in state.draft.picks:
+            n += 1
         state.draft = state.draft.apply(Pick((n - 1) // 12 + 1, (n - 1) % 12 + 1, match.name))
         if mine:
             state.my_player_names.add(match.name)
-        state.last_poll_ok = time.time()
+        # Only stands in for the poll timestamp when there IS no poll:
+        # with --espn active, a hand-entered pick is not evidence the feed
+        # recovered, and refreshing the clock here would hide a dead feed
+        # behind a "fresh" indicator.
+        if state.pick_source is None:
+            state.last_poll_ok = time.time()
     return True
