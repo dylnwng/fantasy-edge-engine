@@ -226,6 +226,25 @@ def test_manual_pick_still_refreshes_the_clock_in_manual_only_mode():
     assert state.snapshot()["stale"] is False
 
 
+def test_manual_pick_rejects_a_name_already_drafted():
+    # Double-entering a drafted name used to be silently accepted,
+    # consuming a phantom slot with no feedback.
+    state = _state()
+    assert manual_pick(state, "A") is True
+    assert manual_pick(state, "A") is False
+    assert state.snapshot()["picks_made"] == 1
+
+
+def test_manual_pick_allows_a_repeat_up_to_the_board_count_for_shared_names():
+    # Two real players can share a name (e.g. QB and LB Josh Allen);
+    # each board entry is draftable exactly once.
+    state = _state(board=[_bp("Same", 1.0), _bp("Same", 2.0)])
+    assert manual_pick(state, "Same") is True
+    assert manual_pick(state, "Same") is True
+    assert manual_pick(state, "Same") is False
+    assert state.snapshot()["picks_made"] == 2
+
+
 def test_pick_endpoint_records_a_manual_pick_over_http():
     # The served page's manual-entry fallback: POST /pick must reach
     # manual_pick(), match case-insensitively, and 404 unknown names.

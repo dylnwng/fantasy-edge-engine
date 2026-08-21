@@ -192,7 +192,7 @@ document.getElementById('pick').addEventListener('submit', async ev => {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ name, mine }) });
     if (r.ok) { input.value = ''; msg.textContent = ''; tick(); }
-    else { msg.textContent = "'" + name + "' isn't on the board"; }
+    else { msg.textContent = "'" + name + "' isn't on the board \u2014 check spelling, or he's already drafted"; }
   } catch (e) { msg.textContent = 'pick not recorded — no connection'; }
 });
 </script>
@@ -274,6 +274,15 @@ def manual_pick(state: ServerState, name: str, mine: bool = False) -> bool:
     if match is None:
         return False
     with state.lock:
+        # Reject once the name is drafted as many times as it appears on the
+        # board. Two real players CAN share a name (tracker.py supports it),
+        # so this counts board entries rather than refusing any repeat --
+        # but a repeat beyond that is a double-entry consuming a phantom
+        # slot, and the user deserves feedback instead of silence.
+        on_board = sum(1 for b in state.draft.board if b.name == match.name)
+        drafted = sum(1 for p in state.draft.picks.values() if p.player_name == match.name)
+        if drafted >= on_board:
+            return False
         # Next UNOCCUPIED slot, not pick-count + 1: when the ESPN poll has
         # already keyed real picks by (round, pick), count-derived keys can
         # land on an occupied slot and silently overwrite a real pick --
