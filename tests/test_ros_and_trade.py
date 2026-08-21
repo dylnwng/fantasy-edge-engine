@@ -190,3 +190,119 @@ def test_snapshot_counts_down_unfilled_starting_slots():
     state = _state()
     manual_pick(state, "A", mine=True)
     assert state.snapshot()["unfilled"]["RB"] == 1
+
+
+def test_manual_pick_never_overwrites_a_slot_the_poll_already_filled():
+    # The ESPN poll keys picks by their real (round, pick) slot. A manual
+    # pick derived from pick-count + 1 used to land on an occupied slot and
+    # silently replace the polled pick -- resurrecting a drafted player.
+    from edge_engine.draft.tracker import Pick
+
+    state = _state()
+    state.draft = state.draft.apply(Pick(1, 1, "A"))
+
+    assert manual_pick(state, "B") is True
+    snap = state.snapshot()
+    assert snap["picks_made"] == 2
+    assert [p["name"] for p in snap["best_available"]] == []
+
+
+def test_manual_pick_does_not_reset_the_poll_staleness_clock_when_polling():
+    # With --espn active, a hand-entered pick is not evidence the feed
+    # recovered; refreshing last_poll_ok would hide a dead feed behind a
+    # "fresh" indicator.
+    state = _state()
+    state.pick_source = object()
+    state.last_poll_ok -= 30
+
+    manual_pick(state, "A")
+    assert state.snapshot()["stale"] is True
+
+
+def test_manual_pick_still_refreshes_the_clock_in_manual_only_mode():
+    state = _state()  # pick_source is None
+    state.last_poll_ok -= 30
+    manual_pick(state, "A")
+    assert state.snapshot()["stale"] is False
+
+
+def test_manual_pick_rejects_a_name_already_drafted():
+    # Double-entering a drafted name used to be silently accepted,
+    # consuming a phantom slot with no feedback.
+    state = _state()
+    assert manual_pick(state, "A") is True
+    assert manual_pick(state, "A") is False
+    assert state.snapshot()["picks_made"] == 1
+
+
+def test_manual_pick_allows_a_repeat_up_to_the_board_count_for_shared_names():
+    # Two real players can share a name (e.g. QB and LB Josh Allen);
+    # each board entry is draftable exactly once.
+    state = _state(board=[_bp("Same", 1.0), _bp("Same", 2.0)])
+    assert manual_pick(state, "Same") is True
+    assert manual_pick(state, "Same") is True
+    assert manual_pick(state, "Same") is False
+    assert state.snapshot()["picks_made"] == 2
+
+
+def test_pick_endpoint_records_a_manual_pick_over_http():
+    # The served page's manual-entry fallback: POST /pick must reach
+    # manual_pick(), match case-insensitively, and 404 unknown names.
+    # http.client, not urllib: CI re-runs the suite behind a poisoned
+    # proxy to prove no test needs the network, and urllib would route
+    # this loopback call through it.
+    import http.client
+    import json
+    import threading
+    from http.server import HTTPServer
+
+    from edge_engine.draft.server import _make_handler
+
+    state = _state()
+    httpd = HTTPServer(("127.0.0.1", 0), _make_handler(state))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    port = httpd.server_address[1]
+
+    def post(payload):
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        try:
+            conn.request("POST", "/pick", json.dumps(payload),
+                         {"Content-Type": "application/json"})
+            return conn.getresponse().status
+        finally:
+            conn.close()
+
+    try:
+        assert post({"name": "a", "mine": True}) == 200
+        snap = state.snapshot()
+        assert snap["picks_made"] == 1
+        assert [p["name"] for p in snap["my_roster"]] == ["A"]
+
+        assert post({"name": "Not On Board"}) == 404
+    finally:
+        httpd.shutdown()
+
+
+def test_live_source_refreshes_even_when_the_draft_started_empty():
+    # Server started before the draft begins: the constructor sees zero
+    # picks. Gating refresh_draft() on a non-empty pick list left the
+    # board frozen at zero picks for the whole draft.
+    from edge_engine.draft.live import EspnDraftPickSource
+
+    class FakePick:
+        def __init__(self, n, name):
+            self.round_num, self.round_pick, self.playerName = 1, n, name
+
+    class FakeLeague:
+        def __init__(self):
+            self.draft = []
+
+        def refresh_draft(self):
+            self.draft = [FakePick(1, "A")]
+
+    source = EspnDraftPickSource(league_id=1, year=2026, espn_s2="s2", swid="swid")
+    source._league = FakeLeague()
+
+    assert source.fetch_picks() == []       # first call: constructor's view
+    picks = source.fetch_picks()            # later polls must re-fetch
+    assert [p.player_name for p in picks] == ["A"]

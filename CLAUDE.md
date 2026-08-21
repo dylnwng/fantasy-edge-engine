@@ -56,8 +56,19 @@ python -m edge_engine.model.train_qb                      # the separate QB mode
 python -m edge_engine.model.walk_forward                  # rolling-origin eval, writes nothing
 python -m edge_engine.model.history [--season N]          # how past flags actually panned out
 python -m edge_engine.model.calibration [--dry-run]       # fit P(hit) from walk-forward OOS
+python -m edge_engine.draft [--live|--serve [--espn]]     # ADP board + draft-night screen
 streamlit run app.py
 ```
+
+There is no configured linter. Before committing, syntax-check what you touched
+(`python -m py_compile <files>`) and run the test suite.
+
+**Dashboard copy rule (app.py, theme.py):** everything a user reads must sound like a
+fantasy football site, not a stats package — no MAE, no z-scores, no "divergence", no
+model names. Fantasy jargon (ADP, FAAB, tier, buy low, flier, snap share) is preferred.
+UI copy must also never promise more than the code does (e.g. a button that only clears
+a cache must not claim to pull fresh data). The draft-night screen has its own rules
+(server.py docstring): one screen, no scrolling, no animation, keyboard-only.
 
 `walk_forward` evaluates across every ingested season instead of the single held-out
 season `train` uses, and reports **fold agreement** (how many seasons independently
