@@ -229,10 +229,12 @@ def test_manual_pick_still_refreshes_the_clock_in_manual_only_mode():
 def test_pick_endpoint_records_a_manual_pick_over_http():
     # The served page's manual-entry fallback: POST /pick must reach
     # manual_pick(), match case-insensitively, and 404 unknown names.
+    # http.client, not urllib: CI re-runs the suite behind a poisoned
+    # proxy to prove no test needs the network, and urllib would route
+    # this loopback call through it.
+    import http.client
     import json
     import threading
-    import urllib.error
-    import urllib.request
     from http.server import HTTPServer
 
     from edge_engine.draft.server import _make_handler
@@ -240,24 +242,24 @@ def test_pick_endpoint_records_a_manual_pick_over_http():
     state = _state()
     httpd = HTTPServer(("127.0.0.1", 0), _make_handler(state))
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    url = f"http://127.0.0.1:{httpd.server_address[1]}/pick"
+    port = httpd.server_address[1]
 
     def post(payload):
-        req = urllib.request.Request(
-            url, data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json"}, method="POST",
-        )
-        return urllib.request.urlopen(req, timeout=5)
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        try:
+            conn.request("POST", "/pick", json.dumps(payload),
+                         {"Content-Type": "application/json"})
+            return conn.getresponse().status
+        finally:
+            conn.close()
 
     try:
-        assert post({"name": "a", "mine": True}).status == 200
+        assert post({"name": "a", "mine": True}) == 200
         snap = state.snapshot()
         assert snap["picks_made"] == 1
         assert [p["name"] for p in snap["my_roster"]] == ["A"]
 
-        with pytest.raises(urllib.error.HTTPError) as e:
-            post({"name": "Not On Board"})
-        assert e.value.code == 404
+        assert post({"name": "Not On Board"}) == 404
     finally:
         httpd.shutdown()
 
