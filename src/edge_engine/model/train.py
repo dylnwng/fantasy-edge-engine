@@ -79,6 +79,23 @@ def build_training_table(config: ModelConfig) -> pd.DataFrame:
     return build_training_table_with_merged(config)[0]
 
 
+def build_estimator() -> xgb.XGBRegressor:
+    """The shipped model's hyperparameters, in one place.
+
+    Extracted so an evaluation harness measuring this model (see
+    model/walk_forward.py) can construct the identical estimator rather
+    than copying these numbers and silently drifting from them the next
+    time they're tuned. Pure refactor -- train_and_evaluate below builds
+    exactly what it always did."""
+    return xgb.XGBRegressor(
+        objective="reg:squarederror",
+        n_estimators=200,
+        max_depth=4,
+        learning_rate=0.05,
+        random_state=0,
+    )
+
+
 def train_and_evaluate(config: ModelConfig | None = None) -> dict:
     config = config or load_model_config()
     table = build_training_table(config)
@@ -92,13 +109,7 @@ def train_and_evaluate(config: ModelConfig | None = None) -> dict:
     if train_df.empty or val_df.empty:
         raise ValueError("Empty train or validation set — check model_config.yaml seasons.")
 
-    model = xgb.XGBRegressor(
-        objective="reg:squarederror",
-        n_estimators=200,
-        max_depth=4,
-        learning_rate=0.05,
-        random_state=0,
-    )
+    model = build_estimator()
     model.fit(train_df[feat_cols], train_df["label_next_week_points"])
 
     val_df = val_df.copy()

@@ -28,7 +28,12 @@ USAGE_COLUMNS = [
 ID_COLUMNS = ["season", "week", "player_id", "position", "team"]
 
 
-def build_features(player_week: pd.DataFrame, points: pd.Series, window: int = 2) -> pd.DataFrame:
+def build_features(
+    player_week: pd.DataFrame,
+    points: pd.Series,
+    window: int = 2,
+    usage_columns: list[str] | None = None,
+) -> pd.DataFrame:
     """player_week: requirement 2's usage table for one or more seasons.
     points: fantasy points per row of player_week (same index/order),
     computed via scoring.compute_fantasy_points() under league settings.
@@ -39,6 +44,8 @@ def build_features(player_week: pd.DataFrame, points: pd.Series, window: int = 2
     a season, or any row without enough trailing history — drop those
     before training; prediction-time callers keep them since there's no
     future label to check yet for the most recent week)."""
+    usage_columns = list(USAGE_COLUMNS if usage_columns is None else usage_columns)
+
     df = player_week.copy()
     df["points"] = points.to_numpy()
     df = df.sort_values(["player_id", "season", "week"]).reset_index(drop=True)
@@ -62,7 +69,7 @@ def build_features(player_week: pd.DataFrame, points: pd.Series, window: int = 2
 
     grouped = df.groupby(["player_id", "season"], group_keys=False)
 
-    for col in USAGE_COLUMNS:
+    for col in usage_columns:
         df[f"trailing_{col}_avg"] = grouped[col].transform(
             lambda s: s.rolling(window, min_periods=window).mean()
         )
@@ -77,10 +84,17 @@ def build_features(player_week: pd.DataFrame, points: pd.Series, window: int = 2
     return df[[*ID_COLUMNS, *feature_cols, "label_next_week_points"]]
 
 
-def feature_columns(window: int = 2) -> list[str]:
+def feature_columns(window: int = 2, usage_columns: list[str] | None = None) -> list[str]:
     """The model's input feature column names, for use at both train and
-    predict time so they never drift apart."""
-    cols = [f"trailing_{c}_avg" for c in USAGE_COLUMNS]
-    cols += [f"trailing_{c}_trend" for c in USAGE_COLUMNS]
-    cols.append("trailing_points_avg")
-    return cols
+    predict time so they never drift apart.
+
+    `usage_columns` exists so an experiment can trail a DIFFERENT set of
+    per-week columns through the identical windowing logic -- season
+    boundaries, played-games-not-calendar-weeks, the duplicate-key guard --
+    rather than reimplementing it and getting one of those subtleties
+    wrong. Defaulted, so the shipped feature set is unchanged."""
+    cols = list(USAGE_COLUMNS if usage_columns is None else usage_columns)
+    out = [f"trailing_{c}_avg" for c in cols]
+    out += [f"trailing_{c}_trend" for c in cols]
+    out.append("trailing_points_avg")
+    return out

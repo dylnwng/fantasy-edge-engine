@@ -11,7 +11,7 @@ to find out now than after the download.
 
 ## 0. What you need
 
-- **Python 3.11+**
+- **Python 3.12+**
 - **An ESPN fantasy football league.** ESPN only. Sleeper, Yahoo and NFL.com
   are not supported and adding them is not a small change.
 - ~2 GB of disk for the cached NFL data.
@@ -29,8 +29,10 @@ python3 -m venv .venv && source .venv/bin/activate
 bash scripts/install.sh
 ```
 
-`install.sh` exists because `nfl_data_py` needs a two-step install — don't
-replace it with a plain `pip install -r requirements.txt`.
+`install.sh` exists because a plain `pip install -r requirements.txt` skips
+the editable install (`pip install -e .`) that makes `edge_engine` importable
+from a bare checkout, and (on macOS) the OpenMP runtime xgboost needs but
+doesn't bundle — don't replace it with a plain `pip install`.
 
 Check it worked:
 
@@ -38,7 +40,7 @@ Check it worked:
 python -m pytest -q
 ```
 
-You should see ~249 tests pass. They use synthetic data only — no network,
+You should see ~440 tests pass. They use synthetic data only — no network,
 no credentials.
 
 ---

@@ -70,11 +70,32 @@ def score_as_of_week(season: int, target_week: int, config: ModelConfig | None =
         .copy()
     )
 
+    # Quarterbacks come from a SEPARATE model with its own feature space
+    # (volume, not receiving usage) and are unioned in rather than merged
+    # upstream -- the WR/RB/TE pipeline here is validated and must not be
+    # perturbed by a position it was never built for. QB rows carry the
+    # identical column contract, so everything downstream is unaware two
+    # models exist. Absent a trained QB artifact this is a no-op and the
+    # tool behaves exactly as it did before QBs were covered.
+    #
+    # Resolved BEFORE the empty-pool short-circuit below, not after: the
+    # QB model builds its features from play-by-play directly, while the
+    # main model scores off the ingested usage table, so the main pool can
+    # be legitimately empty (usage table not yet ingested for this season,
+    # or the points join empty on nflverse's publish lag) while the QB
+    # model has perfectly good rows. Returning early on the main pool
+    # alone silently dropped every quarterback.
+    from edge_engine.model.predict_qb import score_qbs_as_of_week
+
+    qbs = score_qbs_as_of_week(season, target_week, config, player_week=player_week)
+
     if latest.empty:
         # Genuinely no one has enough trailing games yet (e.g. asking for
         # week <= trailing_window+1 this season) -- return the same shape
         # any caller expects, not a crash several pandas frames deep from
         # feeding model.predict() a 0-row input.
+        if not qbs.empty:
+            return qbs.sort_values("predicted_score", ascending=False).reset_index(drop=True)
         empty_cols = [
             *latest.columns,
             "predicted_score",
@@ -118,16 +139,6 @@ def score_as_of_week(season: int, target_week: int, config: ModelConfig | None =
     roster_statuses = get_flagged_roster_statuses()
     latest["roster_status_note"] = [roster_status_note(row.player_id, roster_statuses) for row in latest.itertuples()]
 
-    # Quarterbacks come from a SEPARATE model with its own feature space
-    # (volume, not receiving usage) and are unioned in here rather than
-    # merged upstream -- the WR/RB/TE pipeline above is validated and must
-    # not be perturbed by a position it was never built for. QB rows carry
-    # the identical column contract, so everything downstream is unaware
-    # two models exist. Absent a trained QB artifact this is a no-op and
-    # the tool behaves exactly as it did before QBs were covered.
-    from edge_engine.model.predict_qb import score_qbs_as_of_week
-
-    qbs = score_qbs_as_of_week(season, target_week, config, player_week=player_week)
     if not qbs.empty:
         latest = pd.concat([latest, qbs], ignore_index=True)
 
