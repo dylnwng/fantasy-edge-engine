@@ -26,6 +26,7 @@ from datetime import date
 from edge_engine.model.config import load_model_config
 from edge_engine.ranking.output import RankedFreeAgent, build_free_agent_rankings
 from edge_engine.roster.interface import get_default_source
+from edge_engine.roster.unresolved import unresolved_headline
 from edge_engine.roster.models import LeagueConfig, Player
 
 # Standard fantasy convention: a FLEX slot can be filled by any of these.
@@ -171,7 +172,7 @@ def _print_unresolved(unresolved: list[Player], show_all: bool) -> None:
     rankings; --all prints every one."""
     if not unresolved:
         return
-    print(f"\n{len(unresolved)} free agent(s) did not resolve and are excluded above — check spelling/team:")
+    print(f"\n{unresolved_headline(unresolved)}")
     shown = unresolved if show_all else unresolved[:5]
     for p in shown:
         print(f"  {p.name} ({p.position}, {p.team}) [{p.match_status}: {p.match_note}]")

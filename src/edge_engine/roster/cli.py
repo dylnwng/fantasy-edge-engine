@@ -13,6 +13,7 @@ from __future__ import annotations
 from datetime import date
 
 from edge_engine.roster.interface import get_default_source
+from edge_engine.roster.unresolved import unresolved_headline
 
 
 def main() -> None:
@@ -46,7 +47,7 @@ def main() -> None:
 
     unmatched = [p for p in roster + free_agents if p.match_status != "matched"]
     if unmatched:
-        print(f"\n{len(unmatched)} player(s) did not resolve cleanly — check spelling/team above.")
+        print(f"\n{unresolved_headline(unmatched, kind='player')}")
 
 
 if __name__ == "__main__":

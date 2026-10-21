@@ -21,6 +21,7 @@ from edge_engine.model.predict import score_latest_week
 from edge_engine.paths import PLAYER_WEEK_PATH
 from edge_engine.ranking.usage_trend import usage_trend_explanation
 from edge_engine.roster.interface import get_default_source
+from edge_engine.roster.unresolved import unresolved_headline
 from edge_engine.roster.models import LeagueConfig, Player
 
 ConfidenceTier = str  # "High" | "Medium" | "Low"
@@ -175,7 +176,7 @@ def main() -> None:
     _print_table(candidates)
 
     if unresolved:
-        print(f"\n{len(unresolved)} free agent(s) did not resolve and are excluded above — check spelling/team:")
+        print(f"\n{unresolved_headline(unresolved)}")
         for p in unresolved:
             print(f"  {p.name} ({p.position}, {p.team}) [{p.match_status}: {p.match_note}]")
 
